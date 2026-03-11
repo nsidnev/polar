@@ -1,5 +1,8 @@
 import contextlib
 import contextvars
+import json
+import os
+import uuid
 from collections.abc import Callable
 from typing import Any, ClassVar
 
@@ -15,6 +18,7 @@ from dramatiq.middleware.group_callbacks import GroupCallbacks
 from dramatiq.rate_limits.backends import RedisBackend as RateLimiterBackend
 from dramatiq.results import Results
 from dramatiq.results.backends import RedisBackend as ResultsBackend
+from vercel.workers.dramatiq import VercelQueuesBroker
 
 from polar.config import settings
 from polar.logfire import instrument_httpx
@@ -83,6 +87,8 @@ scheduler_middleware = SchedulerMiddleware()
 class LogContextMiddleware(dramatiq.Middleware):
     """Middleware to manage log context for each message."""
 
+    _log = structlog.get_logger("polar.worker")
+
     def before_process_message(
         self, broker: dramatiq.Broker, message: dramatiq.MessageProxy
     ) -> None:
@@ -99,6 +105,13 @@ class LogContextMiddleware(dramatiq.Middleware):
         if source_correlation_id is not None:
             sentry_sdk.set_tag("source_correlation_id", source_correlation_id)
 
+        self._log.info(
+            "task.started",
+            actor_name=message.actor_name,
+            message_id=message.message_id,
+            queue_name=message.queue_name,
+        )
+
     def after_process_message(
         self,
         broker: dramatiq.Broker,
@@ -107,6 +120,20 @@ class LogContextMiddleware(dramatiq.Middleware):
         result: Any | None = None,
         exception: BaseException | None = None,
     ) -> None:
+        if exception is not None:
+            self._log.error(
+                "task.failed",
+                actor_name=message.actor_name,
+                message_id=message.message_id,
+                error=str(exception),
+            )
+        else:
+            self._log.info(
+                "task.completed",
+                actor_name=message.actor_name,
+                message_id=message.message_id,
+            )
+
         structlog.contextvars.unbind_contextvars(
             "actor_name", "message_id", "correlation_id", "source_correlation_id"
         )
@@ -114,7 +141,14 @@ class LogContextMiddleware(dramatiq.Middleware):
     def after_skip_message(
         self, broker: dramatiq.Broker, message: dramatiq.MessageProxy
     ) -> None:
-        return self.after_process_message(broker, message)
+        self._log.info(
+            "task.skipped",
+            actor_name=message.actor_name,
+            message_id=message.message_id,
+        )
+        structlog.contextvars.unbind_contextvars(
+            "actor_name", "message_id", "correlation_id", "source_correlation_id"
+        )
 
 
 class LogfireMiddleware(dramatiq.Middleware):
@@ -176,12 +210,12 @@ class LogfireMiddleware(dramatiq.Middleware):
 
 def get_broker() -> dramatiq.Broker:
     redis_pool = redis.ConnectionPool.from_url(
-        settings.redis_url,
+        settings.get_redis_url(),
         client_name=f"{settings.ENV.value}.worker.dramatiq",
     )
 
-    result_backend = ResultsBackend(url=settings.redis_url, encoder=JSONEncoder())
-    rate_limiter_backend = RateLimiterBackend(url=settings.redis_url)
+    result_backend = ResultsBackend(url=settings.get_redis_url(), encoder=JSONEncoder())
+    rate_limiter_backend = RateLimiterBackend(url=settings.get_redis_url())
 
     middleware_list = [
         # Infrastructure & async support
@@ -215,13 +249,25 @@ def get_broker() -> dramatiq.Broker:
         middleware.CurrentMessage(),
     ]
 
-    broker = RedisBroker(
+    if os.getenv("VERCEL"):
+        # patch JSON encoder for UUID serialization, because VercelQueuesBroker
+        # uses plain json.dumps() internally
+        _original_json_default = json.JSONEncoder.default
+
+        def _json_default(self: json.JSONEncoder, obj: Any) -> Any:
+            if isinstance(obj, uuid.UUID):
+                return str(obj)
+            return _original_json_default(self, obj)
+
+        json.JSONEncoder.default = _json_default  # type: ignore[assignment]
+
+        return VercelQueuesBroker(middleware=middleware_list)
+
+    return RedisBroker(
         connection_pool=redis_pool,
         middleware=middleware_list,
         dead_message_ttl=3600 * 1000,  # 1 hour in milliseconds
     )
-
-    return broker
 
 
 __all__ = [

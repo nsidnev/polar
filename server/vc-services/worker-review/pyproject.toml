@@ -1,0 +1,10 @@
+[project]
+name = "polar-worker-review"
+version = "0.0.0"
+requires-python = ">=3.14.0"
+dependencies = [
+  "polar[browser]",
+]
+
+[tool.uv.sources]
+polar = { path = "../..", editable = false }

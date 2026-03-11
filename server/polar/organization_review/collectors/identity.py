@@ -1,7 +1,5 @@
-import stripe as stripe_lib
 import structlog
 
-from polar.integrations.stripe.service import stripe as stripe_service
 from polar.models.account import Account
 
 from ..schemas import IdentityData
@@ -10,6 +8,10 @@ log = structlog.get_logger(__name__)
 
 
 async def collect_identity_data(account: Account | None) -> IdentityData:
+    import stripe as stripe_lib
+
+    from polar.integrations.stripe.service import stripe as stripe_service
+
     if account is None or account.admin is None:
         return IdentityData()
 

@@ -1,0 +1,118 @@
+{
+  "experimentalServices": {
+    "frontend": {
+      "framework": "nextjs",
+      "entrypoint": "clients/apps/web",
+      "routePrefix": "/"
+    },
+    "api": {
+      "framework": "fastapi",
+      "entrypoint": "server/vc-services/api",
+      "routePrefix": "/api",
+      "buildCommand": "export PATH=/pnpm10/node_modules/.bin:$PATH && cd ../.. && uv run --active --no-dev --no-sync task backoffice_vercel && cp -r polar/backoffice/static vc-services/api/backoffice-static && uv run --active --no-dev --no-sync task db_migrate"
+    },
+    "worker": {
+      "type": "worker",
+      "runtime": "python",
+      "entrypoint": "server/vc-services/worker/run.py",
+      "topics": ["high-priority", "medium-priority", "low-priority", "webhooks"],
+      "buildCommand": "export PATH=/pnpm10/node_modules/.bin:$PATH && cd ../.. && uv run --active --no-dev --no-sync task emails_vercel && cp emails/bin/react-email-pkg vc-services/worker/react-email-pkg"
+    },
+    "worker-review": {
+      "type": "worker",
+      "runtime": "python",
+      "entrypoint": "server/vc-services/worker-review/run.py",
+      "topics": ["org-review"]
+    },
+    "cron-subscription-cycle": {
+      "type": "cron",
+      "runtime": "python",
+      "entrypoint": "server/vc-services/cron/tasks/subscription_cycle.py",
+      "schedule": "* * * * *"
+    },
+    "cron-expire-checkouts": {
+      "type": "cron",
+      "runtime": "python",
+      "entrypoint": "server/vc-services/cron/tasks/expire_checkouts.py",
+      "schedule": "0,15,30,45 * * * *"
+    },
+    "cron-enqueue-billing": {
+      "type": "cron",
+      "runtime": "python",
+      "entrypoint": "server/vc-services/cron/tasks/enqueue_billing.py",
+      "schedule": "*/15 * * * *"
+    },
+    "cron-process-dunning": {
+      "type": "cron",
+      "runtime": "python",
+      "entrypoint": "server/vc-services/cron/tasks/process_dunning.py",
+      "schedule": "0 * * * *"
+    },
+    "cron-trigger-payouts": {
+      "type": "cron",
+      "runtime": "python",
+      "entrypoint": "server/vc-services/cron/tasks/trigger_payouts.py",
+      "schedule": "15 * * * *"
+    },
+    "cron-sync-stripe": {
+      "type": "cron",
+      "runtime": "python",
+      "entrypoint": "server/vc-services/cron/tasks/sync_stripe.py",
+      "schedule": "5 * * * *"
+    },
+    "cron-renewal-reminders": {
+      "type": "cron",
+      "runtime": "python",
+      "entrypoint": "server/vc-services/cron/tasks/renewal_reminders.py",
+      "schedule": "30 * * * *"
+    },
+    "cron-trial-reminders": {
+      "type": "cron",
+      "runtime": "python",
+      "entrypoint": "server/vc-services/cron/tasks/trial_reminders.py",
+      "schedule": "30 * * * *"
+    },
+    "cron-delete-expired-auth": {
+      "type": "cron",
+      "runtime": "python",
+      "entrypoint": "server/vc-services/cron/tasks/delete_expired_auth.py",
+      "schedule": "0 0 * * *"
+    },
+    "cron-delete-expired-emails": {
+      "type": "cron",
+      "runtime": "python",
+      "entrypoint": "server/vc-services/cron/tasks/delete_expired_emails.py",
+      "schedule": "0 0 * * *"
+    },
+    "cron-delete-expired-sessions": {
+      "type": "cron",
+      "runtime": "python",
+      "entrypoint": "server/vc-services/cron/tasks/delete_expired_sessions.py",
+      "schedule": "0 0 * * *"
+    },
+    "cron-prune-external-events": {
+      "type": "cron",
+      "runtime": "python",
+      "entrypoint": "server/vc-services/cron/tasks/prune_external_events.py",
+      "schedule": "0 0 * * *"
+    },
+    "cron-archive-webhooks": {
+      "type": "cron",
+      "runtime": "python",
+      "entrypoint": "server/vc-services/cron/tasks/archive_webhooks.py",
+      "schedule": "0 0 * * *"
+    },
+    "cron-sync-stripe-fees": {
+      "type": "cron",
+      "runtime": "python",
+      "entrypoint": "server/vc-services/cron/tasks/sync_stripe_fees.py",
+      "schedule": "0 0 * * *"
+    },
+    "cron-slo-report": {
+      "type": "cron",
+      "runtime": "python",
+      "entrypoint": "server/vc-services/cron/tasks/slo_report.py",
+      "schedule": "0 9 * * 1"
+    }
+  }
+}

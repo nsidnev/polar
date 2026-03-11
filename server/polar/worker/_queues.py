@@ -8,10 +8,11 @@ class TaskPriority(IntEnum):
 
 
 class TaskQueue(StrEnum):
-    HIGH_PRIORITY = "high_priority"
-    MEDIUM_PRIORITY = "medium_priority"
-    LOW_PRIORITY = "low_priority"
+    HIGH_PRIORITY = "high-priority"
+    MEDIUM_PRIORITY = "medium-priority"
+    LOW_PRIORITY = "low-priority"
     WEBHOOKS = "webhooks"
+    ORG_REVIEW = "org-review"
 
 
 __all__ = [

@@ -31,6 +31,7 @@ def create_async_engine(
         pool_size=settings.DATABASE_POOL_SIZE,
         pool_recycle=settings.DATABASE_POOL_RECYCLE_SECONDS,
         command_timeout=settings.DATABASE_COMMAND_TIMEOUT_SECONDS,
+        ssl=settings.postgres_ssl_required,
     )
 
 

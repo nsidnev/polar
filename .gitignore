@@ -154,3 +154,7 @@ server/.tinyb
 
 .turbo
 .claude/worktrees
+
+.vercel/
+.vercel
+.env*.local

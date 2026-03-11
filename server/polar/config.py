@@ -3,11 +3,11 @@ import tempfile
 from datetime import timedelta
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Literal
-from urllib.parse import urlparse
+from typing import Annotated, Any, Literal
+from urllib.parse import parse_qs, urlencode, urlparse
 
 from annotated_types import Ge
-from pydantic import AfterValidator, DirectoryPath, Field, PostgresDsn
+from pydantic import DirectoryPath, Field, PostgresDsn, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from polar.enums import EmailSender, TaxProcessor
@@ -22,20 +22,6 @@ class Environment(StrEnum):
     production = "production"
     test = "test"  # Used for the test environment in Render
 
-
-def _validate_email_renderer_binary_path(value: Path) -> Path:
-    if not value.exists() and not value.is_file():
-        raise ValueError(
-            f"""
-        The provided email renderer binary path {value} is not a valid file path
-        or does not exist.\n
-        If you're in local development, you should build the email renderer binary
-        by running the following command:\n
-        uv run task emails\n
-        """
-        )
-
-    return value
 
 
 env = Environment(os.getenv("POLAR_ENV", Environment.development))
@@ -147,7 +133,12 @@ class Settings(BaseSettings):
     IP_GEOLOCATION_DATABASE_DIRECTORY_PATH: DirectoryPath = Path(__file__).parent.parent
     IP_GEOLOCATION_DATABASE_NAME: str = "ip-geolocation.mmdb"
 
+    # Backoffice
+    BACKOFFICE_STATIC_DIRECTORY_PATH: Path | None = None
+
     # Database
+    POSTGRES_URL: str | None = None
+    POSTGRES_URL_NON_POOLING: str | None = None
     POSTGRES_USER: str = "polar"
     POSTGRES_PWD: str = "polar"
     POSTGRES_HOST: str = "127.0.0.1"
@@ -166,14 +157,13 @@ class Settings(BaseSettings):
     POSTGRES_READ_DATABASE: str | None = None
 
     # Redis
+    REDIS_URL: str | None = None
     REDIS_HOST: str = "127.0.0.1"
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
 
     # Emails
-    EMAIL_RENDERER_BINARY_PATH: Annotated[
-        Path, AfterValidator(_validate_email_renderer_binary_path)
-    ] = (
+    EMAIL_RENDERER_BINARY_PATH: Path = (
         Path(__file__).parent.parent
         / "emails"
         / "bin"
@@ -411,6 +401,26 @@ class Settings(BaseSettings):
 
     TAX_PROCESSORS: list[TaxProcessor] = [TaxProcessor.stripe]
 
+    @model_validator(mode="before")
+    @classmethod
+    def _map_vercel_env_vars(cls, values: dict[str, Any]) -> dict[str, Any]:
+        # when running via `vc dev`, Vercel-injected vars should take precedence
+        # over .env values since the proxy unifies all services under one origin.
+        if api_url := os.getenv("API_URL"):
+            values["BASE_URL"] = api_url
+            values["CHECKOUT_BASE_URL"] = (
+                f"{api_url}/v1/checkout-links/{{client_secret}}/redirect"
+            )
+        if frontend_url := os.getenv("FRONTEND_URL"):
+            values["FRONTEND_BASE_URL"] = frontend_url
+            # cookie domain must match the browser origin,
+            # in case of running via `vc dev`, the frontend hostname which should be the same as API hostname,
+            # which is basically the proxy hostname.
+            hostname = urlparse(frontend_url).hostname
+            if hostname:
+                values["USER_SESSION_COOKIE_DOMAIN"] = hostname
+        return values
+
     model_config = SettingsConfigDict(
         env_prefix="polar_",
         env_file_encoding="utf-8",
@@ -419,11 +429,23 @@ class Settings(BaseSettings):
         extra="allow",
     )
 
-    @property
-    def redis_url(self) -> str:
+    def get_redis_url(self) -> str:
+        if self.REDIS_URL is not None:
+            return self.REDIS_URL
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
     def get_postgres_dsn(self, driver: Literal["asyncpg", "psycopg2"]) -> str:
+        url = self.POSTGRES_URL_NON_POOLING or self.POSTGRES_URL
+        if url is not None:
+            parsed = urlparse(url)
+            query = parsed.query
+            if driver == "asyncpg":
+                params = parse_qs(query)
+                params.pop("channel_binding", None)
+                params.pop("sslmode", None)
+                query = urlencode(params, doseq=True)
+            return parsed._replace(scheme=f"postgresql+{driver}", query=query).geturl()
+
         return str(
             PostgresDsn.build(
                 scheme=f"postgresql+{driver}",
@@ -434,6 +456,15 @@ class Settings(BaseSettings):
                 path=self.POSTGRES_DATABASE,
             )
         )
+
+    @property
+    def postgres_ssl_required(self) -> bool:
+        url = self.POSTGRES_URL_NON_POOLING or self.POSTGRES_URL
+        if url is None:
+            return False
+        params = parse_qs(urlparse(url).query)
+        sslmode = params.get("sslmode", [None])[0]
+        return sslmode in ("require", "verify-ca", "verify-full")
 
     def is_read_replica_configured(self) -> bool:
         return all(

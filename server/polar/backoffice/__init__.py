@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, Request
 from tagflow import tag, text
 
+from polar.config import settings
 from polar.observability.http_metrics import exclude_app_from_metrics
 
 from .accounts.endpoints import router as accounts_router
@@ -40,9 +41,12 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(TagflowMiddleware)
 
 
+_static_dir = settings.BACKOFFICE_STATIC_DIRECTORY_PATH or (
+    Path(__file__).parent / "static"
+)
 app.mount(
     "/static",
-    VersionedStaticFiles(directory=Path(__file__).parent / "static"),
+    VersionedStaticFiles(directory=_static_dir),
     name="static",
 )
 app.include_router(users_router, prefix="/users")

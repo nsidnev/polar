@@ -9,9 +9,16 @@ const ENVIRONMENT =
   process.env.VERCEL_ENV || process.env.NEXT_PUBLIC_VERCEL_ENV || 'development'
 const CODESPACES = process.env.CODESPACES === 'true'
 
-const defaultFrontendHostname = process.env.NEXT_PUBLIC_FRONTEND_BASE_URL
-  ? new URL(process.env.NEXT_PUBLIC_FRONTEND_BASE_URL).hostname
-  : 'polar.sh'
+// With vercel dev, everything is same-origin through the proxy.
+// FRONTEND_URL (absolute) is injected by Vercel; NEXT_PUBLIC_FRONTEND_URL is relative (e.g. "/").
+const defaultFrontendHostname =
+  process.env.VERCEL && process.env.VERCEL_ENV == 'development'
+    ? 'localhost'
+    : process.env.FRONTEND_URL
+      ? new URL(process.env.FRONTEND_URL).hostname
+      : process.env.NEXT_PUBLIC_FRONTEND_BASE_URL
+        ? new URL(process.env.NEXT_PUBLIC_FRONTEND_BASE_URL).hostname
+        : 'polar.sh'
 
 const S3_PUBLIC_IMAGES_BUCKET_ORIGIN = process.env
   .S3_PUBLIC_IMAGES_BUCKET_HOSTNAME
@@ -215,23 +222,28 @@ const nextConfig = {
         permanent: false,
       },
 
-      // Redirect /maintainer to polar.sh if on a different domain name
-      {
-        source: '/dashboard/:path*',
-        destination: `https://${defaultFrontendHostname}/dashboard/:path*`,
-        missing: [
-          {
-            type: 'host',
-            value: defaultFrontendHostname,
-          },
-          {
-            type: 'header',
-            key: 'x-forwarded-host',
-            value: defaultFrontendHostname,
-          },
-        ],
-        permanent: false,
-      },
+      // Redirect /dashboard to canonical domain if on a different domain name.
+      // Skip if running with vercel dev - everything is same-origin through the proxy.
+      ...(process.env.VERCEL && process.env.VERCEL_ENV == 'development'
+        ? []
+        : [
+            {
+              source: '/dashboard/:path*',
+              destination: `https://${defaultFrontendHostname}/dashboard/:path*`,
+              missing: [
+                {
+                  type: 'host',
+                  value: defaultFrontendHostname,
+                },
+                {
+                  type: 'header',
+                  key: 'x-forwarded-host',
+                  value: defaultFrontendHostname,
+                },
+              ],
+              permanent: false,
+            },
+          ]),
 
       {
         source: '/maintainer',

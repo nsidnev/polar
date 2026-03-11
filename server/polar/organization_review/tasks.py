@@ -15,7 +15,7 @@ from polar.organization.repository import (
     OrganizationReviewRepository as OrgReviewRepository,
 )
 from polar.organization.service import organization as organization_service
-from polar.worker import AsyncSessionMaker, TaskPriority, actor
+from polar.worker import AsyncSessionMaker, TaskPriority, TaskQueue, actor
 
 from .agent import run_organization_review
 from .report import build_agent_report
@@ -44,6 +44,7 @@ _VERDICT_MAP: dict[ReviewVerdict, str] = {
 
 @actor(
     actor_name="organization_review.run_agent",
+    queue_name=TaskQueue.ORG_REVIEW,
     priority=TaskPriority.LOW,
     time_limit=180_000,  # 3 min timeout
     max_retries=1,
