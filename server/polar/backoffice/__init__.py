@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, Request
 from tagflow import tag, text
 
+from polar.config import settings
 from polar.observability.http_metrics import exclude_app_from_metrics
 
 from .accounts.endpoints import router as accounts_router
