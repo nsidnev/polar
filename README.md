@@ -98,3 +98,12 @@ Our [`DEVELOPMENT.md`](./DEVELOPMENT.md) file contains everything you need to kn
 ## License
 
 Licensed under [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+
+## vc test
+
+1. Create empty project
+2. Add Redis and Neon integrations with `POLAR` prefix
+3. Create an S3 bucket, generate AWS credentials, add them to `POLAR_AWS_ACCESS_KEY_ID`, `POLAR_AWS_SECRET_ACCESS_KEY` and `POLAR_S3_FILES_BUCKET_NAME` env vars in the project
+4. `cd server/ && uv sync && uv run task generate_dev_jwks && cat .jwks.json`, add generated keys as `POLAR_JWKS` env var to the project
+5. set `POLAR_BACKOFFICE_STATIC_DIRECTORY_PATH=./backoffice-static` and `POLAR_EMAIL_RENDERER_BINARY_PATH=./react-email-pkg` in the project's env var
+6. `vc deploy`
