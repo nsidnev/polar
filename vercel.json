@@ -2,7 +2,7 @@
   "build": {
     "env": {
       "VERCEL_PYTHON_ON_HIVE": "0",
-      "VERCEL_CLI_VERSION": "vercel@https://vercel-5zd4nsoo2.vercel.sh/tarballs/vercel.tgz",
+      "VERCEL_CLI_VERSION": "vercel@https://vercel-aq7qesclc.vercel.sh/tarballs/vercel.tgz",
       "VERCEL_PYTHON_MAX_FUNC_MB": "999",
       "MAXIMISE_TMP_SPACE": "1"
     }
@@ -15,106 +15,30 @@
     },
     "api": {
       "framework": "fastapi",
-      "entrypoint": "server/polar/app.py",
+      "root": "server",
+      "entrypoint": "polar.app:app",
       "routePrefix": "/api",
       "buildCommand": "export PATH=/pnpm10/node_modules/.bin:$PATH && uv run task backoffice && uv run task db_migrate"
     },
     "worker": {
       "type": "worker",
       "runtime": "python",
-      "entrypoint": "server/polar/worker/run.py",
-      "topics": ["high-priority", "medium-priority", "low-priority", "webhooks", "org-review"],
+      "root": "server",
+      "entrypoint": "polar/worker/run.py",
+      "topics": [
+        "high-priority",
+        "medium-priority",
+        "low-priority",
+        "webhooks"
+      ],
       "buildCommand": "export PATH=/pnpm10/node_modules/.bin:$PATH && uv run task emails"
     },
-    "cron-subscription-cycle": {
+    "cron": {
       "type": "cron",
       "runtime": "python",
-      "entrypoint": "server/vc-services/cron/tasks/subscription_cycle.py",
-      "schedule": "* * * * *"
-    },
-    "cron-expire-checkouts": {
-      "type": "cron",
-      "runtime": "python",
-      "entrypoint": "server/vc-services/cron/tasks/expire_checkouts.py",
-      "schedule": "0,15,30,45 * * * *"
-    },
-    "cron-enqueue-billing": {
-      "type": "cron",
-      "runtime": "python",
-      "entrypoint": "server/vc-services/cron/tasks/enqueue_billing.py",
-      "schedule": "*/15 * * * *"
-    },
-    "cron-process-dunning": {
-      "type": "cron",
-      "runtime": "python",
-      "entrypoint": "server/vc-services/cron/tasks/process_dunning.py",
-      "schedule": "0 * * * *"
-    },
-    "cron-trigger-payouts": {
-      "type": "cron",
-      "runtime": "python",
-      "entrypoint": "server/vc-services/cron/tasks/trigger_payouts.py",
-      "schedule": "15 * * * *"
-    },
-    "cron-sync-stripe": {
-      "type": "cron",
-      "runtime": "python",
-      "entrypoint": "server/vc-services/cron/tasks/sync_stripe.py",
-      "schedule": "5 * * * *"
-    },
-    "cron-renewal-reminders": {
-      "type": "cron",
-      "runtime": "python",
-      "entrypoint": "server/vc-services/cron/tasks/renewal_reminders.py",
-      "schedule": "30 * * * *"
-    },
-    "cron-trial-reminders": {
-      "type": "cron",
-      "runtime": "python",
-      "entrypoint": "server/vc-services/cron/tasks/trial_reminders.py",
-      "schedule": "30 * * * *"
-    },
-    "cron-delete-expired-auth": {
-      "type": "cron",
-      "runtime": "python",
-      "entrypoint": "server/vc-services/cron/tasks/delete_expired_auth.py",
-      "schedule": "0 0 * * *"
-    },
-    "cron-delete-expired-emails": {
-      "type": "cron",
-      "runtime": "python",
-      "entrypoint": "server/vc-services/cron/tasks/delete_expired_emails.py",
-      "schedule": "0 0 * * *"
-    },
-    "cron-delete-expired-sessions": {
-      "type": "cron",
-      "runtime": "python",
-      "entrypoint": "server/vc-services/cron/tasks/delete_expired_sessions.py",
-      "schedule": "0 0 * * *"
-    },
-    "cron-prune-external-events": {
-      "type": "cron",
-      "runtime": "python",
-      "entrypoint": "server/vc-services/cron/tasks/prune_external_events.py",
-      "schedule": "0 0 * * *"
-    },
-    "cron-archive-webhooks": {
-      "type": "cron",
-      "runtime": "python",
-      "entrypoint": "server/vc-services/cron/tasks/archive_webhooks.py",
-      "schedule": "0 0 * * *"
-    },
-    "cron-sync-stripe-fees": {
-      "type": "cron",
-      "runtime": "python",
-      "entrypoint": "server/vc-services/cron/tasks/sync_stripe_fees.py",
-      "schedule": "0 0 * * *"
-    },
-    "cron-slo-report": {
-      "type": "cron",
-      "runtime": "python",
-      "entrypoint": "server/vc-services/cron/tasks/slo_report.py",
-      "schedule": "0 9 * * 1"
+      "root": "server",
+      "entrypoint": "polar.worker.cron:crontab",
+      "schedule": "<dynamic>"
     }
   }
 }
