@@ -1,6 +1,7 @@
 [project]
 name = "polar"
 version = "0.0.0"
+readme = "README.md"
 requires-python = ">=3.14.0"
 dependencies = [
   "fastapi>=0.120.2",
@@ -10,6 +11,7 @@ dependencies = [
   "sqlalchemy[asyncio]>=2.0.34",
   "greenlet>=3.1.1",
   "structlog>=24.4.0",
+  "githubkit==0.14.4",
   "redis>=5.0.4",
   "sse-starlette>=2.0.0",
   "stripe>=14,<15",
@@ -32,8 +34,10 @@ dependencies = [
   "typer>=0.12.5",
   "logfire[fastapi,httpx,sqlalchemy,redis]>=2.6.0",
   "makefun>=1.15.6",
+  "boto3>=1.38.30",
   "itsdangerous>=2.2.0",
   "cryptography>=43.0.1",
+  "babel>=2.16.0",
   "pycountry>=24.6.1",
   "python-stdnum>=2.1",
   "ipinfo-db>=0.0.4",
@@ -42,33 +46,23 @@ dependencies = [
   "apscheduler>=3.10.4",
   "plain-client>=0.0.3",
   "tagflow>=0.7.0",
+  "exponent-server-sdk>=2.1.0",
   "dramatiq[redis,watch]>=1.17.1",
-  "vercel-workers[dramatiq]>=0.0.10",
   "prometheus-client>=0.21.0",
   "python-snappy>=0.7.3",
+  "fpdf2>=2.8.3",
+  "pydantic-ai-slim[openai]>=0.7.1",
   "asgi-ratelimit>=0.10.0",
   "aiocsv>=1.4.0",
   "alembic-utils>=0.8.8",
-  "babel>=2.16.0",
   "clickhouse-connect>=0.8.0",
-  "fpdf2>=2.8.3",
-  "exponent-server-sdk>=2.1.0",
-  "pydantic-ai-slim[openai]>=0.7.1",
-  "trafilatura>=2.0.0",
-]
-
-[project.optional-dependencies]
-github-aws = [
-  "githubkit==0.14.4",
-  "boto3>=1.38.30",
-]
-browser = [
   "playwright>=1.50.0",
+  "trafilatura>=2.0.0",
+  "vercel-workers[dramatiq]>=0.0.10",
 ]
 
 [dependency-groups]
 dev = [
-  "polar[github-aws,browser]",
   "mypy>=1.11",
   "pytest<10",
   "pytest-sugar>=1.0.0",
@@ -101,9 +95,7 @@ app = "polar.app:app"
 
 [tool.taskipy.tasks]
 emails = { cmd = "cd emails && pnpm i --frozen-lockfile && pnpm run build", help = "build emails" }
-emails_vercel = { cmd = "task emails && rm -rf emails/dist/ emails/node_modules/", help = "build emails on Vercel" }
 backoffice = { cmd = "pnpm -C polar/backoffice install && pnpm -C polar/backoffice build", help = "build backoffice CSS and JS" }
-backoffice_vercel = { cmd = "task backoffice && rm -rf polar/backoffice/node_modules/", help = "build backoffice CSS and JS" }
 api = { cmd = "env AUTHLIB_INSECURE_TRANSPORT=true uvicorn polar.app:app --reload --workers 1 --host 127.0.0.1 --port 8000", help = "run api service" }
 worker = { cmd = "dramatiq -p 1 -t 1 --watch polar -f polar.worker.scheduler:start polar.worker.run", help = "run worker" }
 test = { cmd = "POLAR_ENV=testing python -m pytest --cov polar/ --cov-report=term-missing", help = "run all tests" }
@@ -174,11 +166,3 @@ warn_untyped_fields = true
 
 [tool.uv.sources]
 dramatiq = { git = "https://github.com/frankie567/dramatiq", rev = "memory-leak-asyncio-ter" }
-vercel-workers = { git = "https://github.com/vercel/vercel", subdirectory = "python/vercel-workers", rev = "nsidnev/workers-dramatiq-middlewares" }
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-packages = ["polar"]
