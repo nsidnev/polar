@@ -41,12 +41,9 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(TagflowMiddleware)
 
 
-_static_dir = settings.BACKOFFICE_STATIC_DIRECTORY_PATH or (
-    Path(__file__).parent / "static"
-)
 app.mount(
     "/static",
-    VersionedStaticFiles(directory=_static_dir),
+    VersionedStaticFiles(directory=Path(__file__).parent / "static"),
     name="static",
 )
 app.include_router(users_router, prefix="/users")

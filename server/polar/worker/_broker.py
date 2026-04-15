@@ -1,8 +1,6 @@
 import contextlib
 import contextvars
-import json
 import os
-import uuid
 from collections.abc import Callable
 from typing import Any, ClassVar
 
@@ -250,17 +248,6 @@ def get_broker() -> dramatiq.Broker:
     ]
 
     if os.getenv("VERCEL"):
-        # patch JSON encoder for UUID serialization, because VercelQueuesBroker
-        # uses plain json.dumps() internally
-        _original_json_default = json.JSONEncoder.default
-
-        def _json_default(self: json.JSONEncoder, obj: Any) -> Any:
-            if isinstance(obj, uuid.UUID):
-                return str(obj)
-            return _original_json_default(self, obj)
-
-        json.JSONEncoder.default = _json_default  # type: ignore[assignment]
-
         return VercelQueuesBroker(middleware=middleware_list)
 
     return RedisBroker(

@@ -18,10 +18,9 @@ def _transform_avatar_urls_for_email(props_json: str) -> str:
 
 
 def render_from_json(template: str, props_json: str) -> str:
-    binary = settings.EMAIL_RENDERER_BINARY_PATH.resolve()
     process = subprocess.Popen(
         [
-            binary,
+            settings.EMAIL_RENDERER_BINARY_PATH,
             template,
             props_json,
         ],

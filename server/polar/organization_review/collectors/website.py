@@ -5,18 +5,15 @@ import ipaddress
 import re
 import socket
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
 from urllib.parse import urljoin, urlparse
 
 import httpx
 import structlog
 import trafilatura
+from playwright.async_api import Browser, Page, Playwright, Route, async_playwright
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
-
-if TYPE_CHECKING:
-    from playwright.async_api import Browser, Page, Playwright, Route
 
 from polar.config import settings
 
@@ -162,8 +159,6 @@ class WebsiteDeps:
     async def get_browser_page(self) -> Page:
         """Lazily launch a headless browser and return its page."""
         if self._browser_page is None:
-            from playwright.async_api import async_playwright
-
             self._playwright = await async_playwright().start()
             self._browser = await self._playwright.chromium.launch(headless=True)
             context = await self._browser.new_context(
