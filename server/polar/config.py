@@ -23,7 +23,6 @@ class Environment(StrEnum):
     test = "test"  # Used for the test environment in Render
 
 
-
 env = Environment(os.getenv("POLAR_ENV", Environment.development))
 if env == Environment.testing:
     env_file = ".env.testing"
@@ -132,9 +131,6 @@ class Settings(BaseSettings):
     CHECKOUT_TTL_SECONDS: int = 60 * 60 * 24  # 24 hours
     IP_GEOLOCATION_DATABASE_DIRECTORY_PATH: DirectoryPath = Path(__file__).parent.parent
     IP_GEOLOCATION_DATABASE_NAME: str = "ip-geolocation.mmdb"
-
-    # Backoffice
-    BACKOFFICE_STATIC_DIRECTORY_PATH: Path | None = None
 
     # Database
     POSTGRES_URL: str | None = None
@@ -411,14 +407,17 @@ class Settings(BaseSettings):
             values["CHECKOUT_BASE_URL"] = (
                 f"{api_url}/v1/checkout-links/{{client_secret}}/redirect"
             )
+
         if frontend_url := os.getenv("FRONTEND_URL"):
             values["FRONTEND_BASE_URL"] = frontend_url
             # cookie domain must match the browser origin,
-            # in case of running via `vc dev`, the frontend hostname which should be the same as API hostname,
+            # in case of running via `vc dev`, the frontend hostname which
+            # should be the same as API hostname,
             # which is basically the proxy hostname.
             hostname = urlparse(frontend_url).hostname
             if hostname:
                 values["USER_SESSION_COOKIE_DOMAIN"] = hostname
+
         return values
 
     model_config = SettingsConfigDict(
@@ -440,10 +439,12 @@ class Settings(BaseSettings):
             parsed = urlparse(url)
             query = parsed.query
             if driver == "asyncpg":
+                # handle unsupported by asyncpg params
                 params = parse_qs(query)
                 params.pop("channel_binding", None)
                 params.pop("sslmode", None)
                 query = urlencode(params, doseq=True)
+
             return parsed._replace(scheme=f"postgresql+{driver}", query=query).geturl()
 
         return str(
@@ -462,6 +463,7 @@ class Settings(BaseSettings):
         url = self.POSTGRES_URL_NON_POOLING or self.POSTGRES_URL
         if url is None:
             return False
+
         params = parse_qs(urlparse(url).query)
         sslmode = params.get("sslmode", [None])[0]
         return sslmode in ("require", "verify-ca", "verify-full")

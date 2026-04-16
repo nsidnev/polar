@@ -1,10 +1,12 @@
+# transform APScheduler cron jobs into Vercel crons format
+
 from collections.abc import Callable, Sequence
 from typing import Any
 
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.cron.fields import BaseField
 
-from polar import tasks  # noqa: F401 — ensure all actors are registered
+from polar import tasks  # noqa: F401 - ensure all actors are registered
 
 from ._broker import scheduler_middleware
 

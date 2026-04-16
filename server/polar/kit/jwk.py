@@ -24,7 +24,8 @@ TIP_MESSAGE = (
 def _validate_jwks(value: Any) -> KeySet:
     raw = str(value).strip()
 
-    # Try as inline JSON (e.g. from an env var)
+    # the value might be coming from env vars,
+    # so try to parse JSON first
     if raw.startswith("{"):
         try:
             return JsonWebKey.import_key_set(raw)

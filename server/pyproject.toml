@@ -90,9 +90,6 @@ dev = [
   "pydantic-evals>=0.7.1",
 ]
 
-[project.scripts]
-app = "polar.app:app"
-
 [tool.taskipy.tasks]
 emails = { cmd = "cd emails && pnpm i --frozen-lockfile && pnpm run build", help = "build emails" }
 backoffice = { cmd = "pnpm -C polar/backoffice install && pnpm -C polar/backoffice build", help = "build backoffice CSS and JS" }

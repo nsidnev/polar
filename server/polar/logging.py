@@ -15,6 +15,26 @@ from polar.config import settings
 Logger = structlog.stdlib.BoundLogger
 
 
+class VercelLoggingHandler(logging.Handler):
+    """Route WARNING+ to stderr, everything else to stdout"""
+
+    def __init__(self, level: int = logging.NOTSET) -> None:
+        super().__init__(level)
+        self._stdout = logging.StreamHandler(sys.stdout)
+        self._stderr = logging.StreamHandler(sys.stderr)
+
+    def setFormatter(self, fmt: logging.Formatter | None) -> None:
+        super().setFormatter(fmt)
+        self._stdout.setFormatter(fmt)
+        self._stderr.setFormatter(fmt)
+
+    def emit(self, record: logging.LogRecord) -> None:
+        if record.levelno >= logging.WARNING:
+            self._stderr.emit(record)
+        else:
+            self._stdout.emit(record)
+
+
 def _map_critical_to_fatal(
     logger: logging.Logger, method_name: str, event_dict: dict[str, Any]
 ) -> dict[str, Any]:
@@ -84,7 +104,7 @@ class Logging[RendererType]:
         # show as [error] in the dashboard.
         handler: logging.Handler
         if _is_vercel():
-            handler = _StdoutStderrHandler(level)
+            handler = VercelLoggingHandler(level)
         else:
             handler = logging.StreamHandler()
             handler.setLevel(level)
@@ -145,26 +165,6 @@ def _is_vercel() -> bool:
 def _is_vercel_production() -> bool:
     vercel_env = os.environ.get("VERCEL_ENV")
     return vercel_env is not None and vercel_env != "development"
-
-
-class _StdoutStderrHandler(logging.Handler):
-    """Route WARNING+ to stderr, everything else to stdout"""
-
-    def __init__(self, level: int = logging.NOTSET) -> None:
-        super().__init__(level)
-        self._stdout = logging.StreamHandler(sys.stdout)
-        self._stderr = logging.StreamHandler(sys.stderr)
-
-    def setFormatter(self, fmt: logging.Formatter | None) -> None:
-        super().setFormatter(fmt)
-        self._stdout.setFormatter(fmt)
-        self._stderr.setFormatter(fmt)
-
-    def emit(self, record: logging.LogRecord) -> None:
-        if record.levelno >= logging.WARNING:
-            self._stderr.emit(record)
-        else:
-            self._stdout.emit(record)
 
 
 def configure(*, logfire: bool = False) -> None:

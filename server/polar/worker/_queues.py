@@ -7,12 +7,12 @@ class TaskPriority(IntEnum):
     LOW = 100
 
 
+# topics on Vercel should not container underscore
 class TaskQueue(StrEnum):
     HIGH_PRIORITY = "high-priority"
     MEDIUM_PRIORITY = "medium-priority"
     LOW_PRIORITY = "low-priority"
     WEBHOOKS = "webhooks"
-    ORG_REVIEW = "org-review"
 
 
 __all__ = [

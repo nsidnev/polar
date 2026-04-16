@@ -46,7 +46,11 @@ class SubscriptionTierDoesNotExist(SubscriptionTaskError):
         super().__init__(message)
 
 
-@actor(actor_name="subscription.cycle_due", priority=TaskPriority.LOW)
+@actor(
+    actor_name="subscription.cycle_due",
+    priority=TaskPriority.LOW,
+    cron_trigger=CronTrigger(),
+)
 async def subscription_cycle_due() -> None:
     async with AsyncSessionMaker() as session:
         statement = (

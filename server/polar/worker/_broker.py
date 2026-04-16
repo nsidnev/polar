@@ -144,9 +144,7 @@ class LogContextMiddleware(dramatiq.Middleware):
             actor_name=message.actor_name,
             message_id=message.message_id,
         )
-        structlog.contextvars.unbind_contextvars(
-            "actor_name", "message_id", "correlation_id", "source_correlation_id"
-        )
+        return self.after_process_message(broker, message)
 
 
 class LogfireMiddleware(dramatiq.Middleware):
