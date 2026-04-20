@@ -1,6 +1,7 @@
 # transform APScheduler cron jobs into Vercel crons format
 
-from collections.abc import Callable, Sequence
+import sys
+from collections.abc import Callable
 from typing import Any
 
 from apscheduler.triggers.cron import CronTrigger
@@ -46,22 +47,35 @@ def trigger_to_crontab(trigger: CronTrigger) -> str:
     return " ".join(parts)
 
 
-def _triggers_to_crontab(
-    cron_triggers: Sequence[tuple[Callable[..., Any], CronTrigger]],
-) -> list[tuple[str, str]]:
-    result = []
-    for send_fn, trigger in cron_triggers:
-        actor = send_fn.__self__  # type: ignore[attr-defined]
-        module = actor.fn.__module__
-        name = actor.fn.__name__
-        schedule = trigger_to_crontab(trigger)
-        result.append((f"{module}:{name}", schedule))
-    return result
+_THIS_MODULE = sys.modules[__name__]
+
+
+def _send_attr_name(actor_name: str) -> str:
+    return "send_" + actor_name.replace(".", "_").replace("-", "_")
+
+
+# Expose each cron actor's bound `send` method as a module-level attribute so
+# the Vercel cron service can invoke it directly.
+# Crons enqueue a message and return, mirroring the Docker scheduler.
+# Task bodies execute in the worker service with full dramatiq middleware initialized.
+for _send_fn, _ in scheduler_middleware.cron_triggers:
+    _actor = _send_fn.__self__  # type: ignore[attr-defined]
+    setattr(_THIS_MODULE, _send_attr_name(_actor.actor_name), _send_fn)
 
 
 class CronTab:
     def get_crons(self) -> list[tuple[str, str]]:
-        return _triggers_to_crontab(scheduler_middleware.cron_triggers)
+        result = []
+        for send_fn, trigger in scheduler_middleware.cron_triggers:
+            actor = send_fn.__self__  # type: ignore[attr-defined]
+            schedule = trigger_to_crontab(trigger)
+            result.append(
+                (
+                    f"{__spec__.name}:{_send_attr_name(actor.actor_name)}",
+                    schedule,
+                )
+            )
+        return result
 
 
 crontab = CronTab()
@@ -69,4 +83,4 @@ crontab = CronTab()
 
 if __name__ == "__main__":
     for name, sched in crontab.get_crons():
-        print(f"{name:60s} {sched}")  # noqa: T201
+        print(f"{name:70s} {sched}")  # noqa: T201
