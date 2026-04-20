@@ -1,6 +1,5 @@
 import datetime
 import functools
-import os
 from collections.abc import Awaitable, Callable
 from typing import Any, ParamSpec
 
@@ -10,13 +9,9 @@ from dramatiq import actor as _actor
 from dramatiq import middleware
 
 from polar.config import settings
-from polar.logfire import configure_logfire
-from polar.logging import configure as configure_logging
 
 # Import metrics FIRST to set PROMETHEUS_MULTIPROC_DIR before prometheus_client is imported
 from polar.observability import metrics as _prometheus_metrics
-from polar.posthog import configure_posthog
-from polar.sentry import configure_sentry
 
 from ._broker import get_broker
 from ._encoder import JSONEncoder
@@ -67,7 +62,6 @@ def get_message_timestamp() -> datetime.datetime:
     return datetime.datetime.fromtimestamp(timestamp / 1000.0, tz=datetime.UTC)
 
 
-_broker_worker_initialized = False
 broker = get_broker()
 dramatiq.set_broker(broker)
 dramatiq.set_encoder(JSONEncoder(broker))
@@ -98,21 +92,6 @@ def actor[**P, R](
     ) -> Callable[P, Awaitable[R]]:
         @functools.wraps(fn)
         async def _wrapped_fn(*args: P.args, **kwargs: P.kwargs) -> R:
-            # a little hack to initialize dramatiq
-            # until we have a proper apscheduler integration
-            global _broker_worker_initialized
-            is_cron_svc = os.getenv("__VC_CRON_ROUTES")
-            if is_cron_svc and not _broker_worker_initialized:
-                configure_sentry()
-                configure_logfire("worker")
-                configure_logging(logfire=True)
-                configure_posthog()
-
-                b = dramatiq.get_broker()
-                b.emit_before("worker_boot", None)
-                b.emit_after("worker_boot", None)
-                _broker_worker_initialized = True
-
             async with JobQueueManager.open(
                 dramatiq.get_broker(), RedisMiddleware.get()
             ):
