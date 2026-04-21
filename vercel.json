@@ -15,7 +15,7 @@
       "root": "server",
       "entrypoint": "polar.app:app",
       "routePrefix": "/api",
-      "buildCommand": "export PATH=/pnpm10/node_modules/.bin:$PATH && uv run task backoffice",
+      "buildCommand": "export PATH=/pnpm10/node_modules/.bin:$PATH && uv run task backoffice && uv run task download_ipinfo",
       "preDeployCommand": "uv run task db_migrate"
     },
     "worker": {
