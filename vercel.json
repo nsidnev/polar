@@ -1,10 +1,7 @@
 {
   "build": {
     "env": {
-      "VERCEL_PYTHON_ON_HIVE": "0",
-      "VERCEL_CLI_VERSION": "vercel@https://vercel-aq7qesclc.vercel.sh/tarballs/vercel.tgz",
-      "VERCEL_PYTHON_MAX_FUNC_MB": "999",
-      "MAXIMISE_TMP_SPACE": "1"
+      "VERCEL_PYTHON_ON_HIVE": "1"
     }
   },
   "experimentalServices": {
