@@ -2109,7 +2109,9 @@ dependencies = [
     { name = "taskipy" },
     { name = "trafilatura" },
     { name = "typer" },
+    { name = "tzdata" },
     { name = "uvicorn", extra = ["standard"] },
+    { name = "vercel" },
     { name = "vercel-workers", extra = ["dramatiq"] },
 ]
 
@@ -2197,7 +2199,9 @@ requires-dist = [
     { name = "taskipy", specifier = ">=1.10.3" },
     { name = "trafilatura", specifier = ">=2.0.0" },
     { name = "typer", specifier = ">=0.12.5" },
+    { name = "tzdata", specifier = ">=2025.1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.31.1" },
+    { name = "vercel", specifier = ">=0.5.6" },
     { name = "vercel-workers", extras = ["dramatiq"], specifier = ">=0.0.10" },
 ]
 

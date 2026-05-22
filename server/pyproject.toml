@@ -59,6 +59,13 @@ dependencies = [
   "playwright>=1.50.0",
   "trafilatura>=2.0.0",
   "vercel-workers[dramatiq]>=0.0.10",
+  # Fallback zoneinfo source so legacy aliases (e.g. "Asia/Calcutta") resolve
+  # on runtimes whose system tzdata omits them.
+  "tzdata>=2025.1",
+  # Vercel Sandbox SDK — used by organization_review to run Chromium remotely
+  # on Vercel (in-process chromium can't launch on Fluid Compute). No-op on
+  # Render/Docker where chromium runs in-process via system playwright.
+  "vercel>=0.5.6",
 ]
 
 [dependency-groups]
@@ -102,6 +109,7 @@ lint = { cmd = "ruff format . && ruff check --fix .", help = "run linters with a
 lint_check = { cmd = "ruff format --check . && ruff check .", help = "run ruff linter" }
 lint_types = { cmd = "mypy polar scripts tests", help = "run mypy type verify" }
 db_migrate = { cmd = "python -m scripts.db upgrade", help = "run alembic upgrade" }
+browser_sandbox = { cmd = "python -m scripts.browser_sandbox", help = "build a Vercel Sandbox snapshot for the remote Chromium used by the website collector and bake its id into polar/organization_review/sandbox.py (runs during worker build)" }
 db_recreate = { cmd = "python -m scripts.db recreate", help = "drop and recreate database" }
 db_reparent = { cmd = "python -m scripts.db reparent", help = "try to auto-fix conflicting migrations" }
 tb_deploy = { cmd = "python -m scripts.tinybird", help = "deploy tinybird datasources" }

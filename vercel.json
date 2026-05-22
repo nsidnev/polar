@@ -29,7 +29,7 @@
         "low-priority",
         "webhooks"
       ],
-      "buildCommand": "export PATH=/pnpm10/node_modules/.bin:$PATH && uv run task emails"
+      "buildCommand": "export PATH=/pnpm10/node_modules/.bin:$PATH && uv run task emails && uv run task browser_sandbox"
     },
     "cron": {
       "type": "cron",
