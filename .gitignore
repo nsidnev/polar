@@ -157,3 +157,5 @@ server/.tinyb
 
 .vercel/
 .env*.local
+.vercel
+.env*

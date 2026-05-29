@@ -1,22 +1,9 @@
-"""Vercel Sandbox adapter for the website collector.
-
-On Vercel Fluid Compute, in-process Chromium can't launch — the base AL2023
-image lacks ~20 shared libraries Chromium needs. This module spins a short-
-lived Vercel Sandbox running `playwright run-server` from a pre-built
-snapshot, then the worker connects to it remotely via `chromium.connect()`.
-
-The `SNAPSHOT_ID` constant below is the build-time substitution target. The
-taskipy task `browser_sandbox` (see `scripts/browser_sandbox.py`) creates a
-fresh snapshot at deploy time and string-replaces the placeholder value
-with the new id. At runtime, `provision_browser_sandbox()` raises if the
-placeholder is still in place.
-"""
-
 from __future__ import annotations
 
 import asyncio
 import os
 import secrets
+from importlib.metadata import version as pkg_version
 from urllib.parse import urlsplit, urlunsplit
 
 import httpx
@@ -43,9 +30,14 @@ BUILD_SANDBOX_TIMEOUT_MS = 15 * 60_000
 READY_POLL_TIMEOUT_S = 30.0
 READY_POLL_INTERVAL_S = 0.5
 
+# Pin the snapshot's Playwright to whatever the worker bundles — the wss
+# protocol requires client and server to match exactly. When pyproject.toml
+# / uv.lock bumps `playwright`, the next deploy's snapshot rebuild picks
+# up the new version automatically.
+PLAYWRIGHT_VERSION = pkg_version("playwright")
+
 # AL2023 packages Chromium needs at runtime. List borrowed from the
-# canonical vercel-sandbox + agent-browser pattern; tweak if a first real
-# build surfaces a missing .so.
+# canonical vercel-sandbox + agent-browser pattern.
 CHROMIUM_DNF_DEPS = [
     "nss",
     "nspr",
@@ -76,23 +68,17 @@ CHROMIUM_DNF_DEPS = [
     "liberation-fonts",
 ]
 
-# Defense-in-depth alongside the existing Python-side SSRF check.
 PRIVATE_CIDRS = [
     "10.0.0.0/8",
     "172.16.0.0/12",
     "192.168.0.0/16",
     "127.0.0.0/8",
     "169.254.0.0/16",
-    "::1/128",
-    "fc00::/7",
 ]
 
 _START_SCRIPT_PATH = "/vercel/sandbox/start.sh"
 _SECRET_PATH = "/vercel/sandbox/secret"
 
-# Start script lives inside the snapshot. Reads the per-instance secret
-# (written by the worker before starting the daemon) and uses it as the URL
-# path token — turns the public wss endpoint into a capability URL.
 _START_SCRIPT = (
     f"""#!/bin/bash
 set -euo pipefail
@@ -238,17 +224,26 @@ async def build_snapshot() -> str:
             [
                 "-c",
                 "dnf clean all 2>&1 && "
-                "dnf install -y --skip-broken " + " ".join(CHROMIUM_DNF_DEPS) + " 2>&1 && "
+                "dnf install -y --skip-broken "
+                + " ".join(CHROMIUM_DNF_DEPS)
+                + " 2>&1 && "
                 "ldconfig 2>&1",
             ],
             sudo=True,
         )
 
-        log.info("website_collector.snapshot_build.pip_install")
-        await sandbox.run_command("pip", ["install", "playwright"])
+        log.info(
+            "website_collector.snapshot_build.pip_install",
+            playwright_version=PLAYWRIGHT_VERSION,
+        )
+        await sandbox.run_command(
+            "pip", ["install", f"playwright=={PLAYWRIGHT_VERSION}"]
+        )
 
         log.info("website_collector.snapshot_build.playwright_install")
-        await sandbox.run_command("python3", ["-m", "playwright", "install", "chromium"])
+        await sandbox.run_command(
+            "python3", ["-m", "playwright", "install", "chromium"]
+        )
 
         log.info("website_collector.snapshot_build.write_start_script")
         await sandbox.write_files(

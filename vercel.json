@@ -1,7 +1,8 @@
 {
   "build": {
     "env": {
-      "VERCEL_PYTHON_ON_HIVE": "1"
+      "VERCEL_PYTHON_ON_HIVE": "1",
+      "UV_LINK_MODE": "copy"
     }
   },
   "experimentalServices": {
@@ -16,7 +17,7 @@
       "entrypoint": "polar.app:app",
       "routePrefix": "/api",
       "buildCommand": "export PATH=/pnpm10/node_modules/.bin:$PATH && uv run task backoffice && uv run task download_ipinfo",
-      "preDeployCommand": "uv run task db_migrate"
+      "preDeployCommand": "uv run --no-sync task db_migrate"
     },
     "worker": {
       "type": "worker",
