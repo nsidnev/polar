@@ -5,39 +5,116 @@
       "UV_LINK_MODE": "copy"
     }
   },
-  "experimentalServices": {
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": {
+        "type": "service",
+        "service": "api",
+        "path": "/:path*"
+      },
+      "transforms": [
+        {
+          "type": "request.path",
+          "op": "set",
+          "args": "/:path*"
+        }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "type": "service",
+        "service": "frontend"
+      }
+    }
+  ],
+  "services": {
     "frontend": {
       "framework": "nextjs",
-      "entrypoint": "clients/apps/web",
-      "routePrefix": "/"
+      "root": "clients/apps/web",
+      "bindings": [
+        {
+          "type": "service",
+          "format": "url", // this will require update in the code, so that settings.api_url can point to the actual API, not to just the deployment host. is it basically VERCEL_URL with the schema? is it useful in this case?
+          "service": "api",
+          "env": "POLAR_API_URL"
+        },
+        {
+          "type": "service",
+          "service": "api",
+          "format": "url", // no "path"? we need to force CORS setup in the "api" in this case even for same domain? do we need to update the code so now it's aware of the /api prefix?
+          "env": "NEXT_PUBLIC_API_URL"
+        }
+      ]
     },
     "api": {
       "framework": "fastapi",
       "root": "server",
       "entrypoint": "polar.app:app",
-      "routePrefix": "/api",
-      "buildCommand": "export PATH=/pnpm10/node_modules/.bin:$PATH && uv run task backoffice && uv run task download_ipinfo",
-      "preDeployCommand": "uv run --no-sync task db_migrate"
+      "buildCommand": "export PATH=/pnpm10/node_modules/.bin:$PATH && uv run task backoffice && uv run task download_ipinfo && uv run task db_migrate", // no preDeployCommand anymore :(
+      "bindings": [
+        {
+          "type": "service",
+          "service": "api",
+          "format": "url",
+          "env": "BASE_URL"
+        },
+        {
+          "type": "service",
+          "service": "frontend",
+          "format": "url",
+          "env": "FRONTEND_BASE_URL"
+        }
+      ]
     },
-    "worker": {
-      "type": "worker",
-      "runtime": "python",
-      "root": "server",
-      "entrypoint": "polar/worker/run.py",
+    "worker": { // what happens here? the Queues routing goes through privatepath/, so at least we don't need rewrites
+      "type": "job", // "experimentalType": "job" or "type": "experimentalJob"?
       "topics": [
         "high-priority",
         "medium-priority",
         "low-priority",
         "webhooks"
       ],
-      "buildCommand": "export PATH=/pnpm10/node_modules/.bin:$PATH && uv run task emails && uv run task browser_sandbox"
-    },
-    "cron": {
-      "type": "cron",
       "runtime": "python",
       "root": "server",
-      "entrypoint": "polar.worker.cron:crontab",
-      "schedule": "<dynamic>"
+      "entrypoint": "polar/worker/run.py",
+      "buildCommand": "export PATH=/pnpm10/node_modules/.bin:$PATH && uv run task emails && uv run task browser_sandbox",
+      "bindings": [
+        {
+          "type": "service",
+          "service": "api",
+          "format": "url",
+          "env": "BASE_URL"
+        },
+        {
+          "type": "service",
+          "service": "frontend",
+          "format": "url",
+          "env": "FRONTEND_BASE_URL"
+        }
+      ]
+    },
+    "crons": { // and what's here? do we need to expose routing rules?
+      "type": "job", // ?
+      "schedule": "<dynamic>", // do we need to ditch "<dynamic>" and setup all crons manually in the top-level "crons"?
+      "runtime": "python",
+      "root": "server",
+      "entrypoint": "polar.worker.cron:crontab", // this would result into 15+ cron routes and "crons" entries
+      "bindings": [
+        {
+          "type": "service",
+          "service": "api",
+          "format": "url",
+          "env": "BASE_URL"
+        },
+        {
+          "type": "service",
+          "service": "frontend",
+          "format": "url",
+          "env": "FRONTEND_BASE_URL"
+        }
+      ]
     }
   }
 }
