@@ -23,9 +23,16 @@ const POLAR_AUTH_COOKIE_KEY =
 const ENVIRONMENT =
   process.env.VERCEL_ENV || process.env.NEXT_PUBLIC_VERCEL_ENV || 'development'
 
-const defaultFrontendHostname = process.env.NEXT_PUBLIC_FRONTEND_BASE_URL
-  ? new URL(process.env.NEXT_PUBLIC_FRONTEND_BASE_URL).hostname
-  : 'polar.sh'
+// With vercel dev, everything is same-origin through the proxy.
+// FRONTEND_URL (absolute) is injected by Vercel; NEXT_PUBLIC_FRONTEND_URL is relative (e.g. "/").
+const defaultFrontendHostname =
+  process.env.VERCEL && process.env.VERCEL_ENV == 'development'
+    ? 'localhost'
+    : process.env.FRONTEND_URL
+      ? new URL(process.env.FRONTEND_URL).hostname
+      : process.env.NEXT_PUBLIC_FRONTEND_BASE_URL
+        ? new URL(process.env.NEXT_PUBLIC_FRONTEND_BASE_URL).hostname
+        : 'polar.sh'
 
 const S3_PUBLIC_IMAGES_BUCKET_ORIGIN = process.env
   .S3_PUBLIC_IMAGES_BUCKET_HOSTNAME
@@ -250,18 +257,31 @@ const nextConfig = {
             type: 'cookie',
             key: POLAR_AUTH_COOKIE_KEY,
           },
-          {
-            type: 'host',
-            value: defaultFrontendHostname,
-          },
+          // On Vercel the frontend is served from a single origin, so the auth
+          // cookie alone is the right signal. The host guard (which scopes this
+          // redirect to the canonical domain on polar.sh) is unreliable under
+          // the same-origin Vercel setup — the request host (127.0.0.1 vs
+          // localhost, with a port) may not equal defaultFrontendHostname — so
+          // skip it there.
+          ...(process.env.VERCEL
+            ? []
+            : [
+                {
+                  type: 'host',
+                  value: defaultFrontendHostname,
+                },
+              ]),
         ],
         permanent: false,
       },
 
-      // Redirect /dashboard to correct domain if on a different domain name
-      // Skip in preview builds — preview env uses a single domain via Caddy proxy
-      ...(!previewBasePath
-        ? [
+      // Redirect /dashboard to correct domain if on a different domain name.
+      // Skip in preview builds (single domain via Caddy proxy) and under
+      // `vercel dev` (everything is same-origin through the proxy).
+      ...(previewBasePath ||
+      (process.env.VERCEL && process.env.VERCEL_ENV == 'development')
+        ? []
+        : [
             {
               source: '/dashboard/:path*',
               destination: `https://${defaultFrontendHostname}/dashboard/:path*`,
@@ -278,8 +298,7 @@ const nextConfig = {
               ],
               permanent: false,
             },
-          ]
-        : []),
+          ]),
 
       {
         source: '/maintainer',

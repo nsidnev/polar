@@ -65,8 +65,15 @@ dependencies = [
   "polar-sdk==0.31.5",
   "anyio>=4.13.0",
   "markdown-it-py>=4.2.0",
+  # tzdata also acts as a fallback zoneinfo source so legacy aliases (e.g.
+  # "Asia/Calcutta") resolve on runtimes whose system tzdata omits them.
   "tzdata>=2026.2",
   "reauth==0.1.8",
+  "vercel-workers[dramatiq]>=0.0.24",
+  # Vercel Sandbox SDK — used by organization_review to run Chromium remotely
+  # on Vercel (in-process chromium can't launch on Fluid Compute). No-op on
+  # Render/Docker where chromium runs in-process via system playwright.
+  "vercel>=0.5.9",
 ]
 
 [dependency-groups]
@@ -115,6 +122,8 @@ lint_check = { cmd = "ruff format --check . && ruff check . && task lint_subquer
 lint_subquery = { cmd = "python scripts/lint_subquery.py", help = "flag .subquery() calls that don't narrow columns" }
 lint_types = { cmd = "mypy --num-workers 2 polar scripts tests", help = "run mypy type verify" }
 db_migrate = { cmd = "python -m scripts.db upgrade", help = "run alembic upgrade" }
+browser_sandbox = { cmd = "python -m scripts.browser_sandbox", help = "build a Vercel Sandbox snapshot for the remote Chromium used by the website collector and bake its id into polar/organization_review/sandbox.py (runs during worker build)" }
+download_ipinfo = { cmd = "python -m polar.checkout.ip_geolocation", help = "download IPInfo country/ASN database (reads IPINFO_ACCESS_TOKEN env var, skips if unset)" }
 db_recreate = { cmd = "python -m scripts.db recreate", help = "drop and recreate database" }
 db_reparent = { cmd = "python -m scripts.db reparent", help = "try to auto-fix conflicting migrations" }
 tb_deploy = { cmd = "python -m scripts.tinybird", help = "deploy tinybird datasources" }

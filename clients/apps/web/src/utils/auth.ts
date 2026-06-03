@@ -1,6 +1,31 @@
 import { getPublicServerURL, getServerURL } from '@/utils/api'
+import { CONFIG } from '@/utils/config'
 import { Client, operations, schemas } from '@polar-sh/client'
 import { redirect } from 'next/navigation'
+
+/**
+ * True when the API shares the frontend's origin (the Vercel same-domain
+ * setup, including `vercel dev`).
+ *
+ * In that case the post-factor step into `/v1/auth/complete` must be reached
+ * via a hard browser navigation (`window.location`) rather than Next's
+ * client-side router. `/v1/auth/complete` is a one-shot GET — it consumes a
+ * single-use token — and the client router would fetch it more than once
+ * (RSC prefetch + navigation), 401-ing on the repeat. When the API is a
+ * different origin (local Docker dev, cross-origin production), the router
+ * already falls back to a single hard navigation, so smooth nav is safe.
+ */
+export const isApiSameOrigin = (): boolean => {
+  if (typeof window === 'undefined') return false
+  try {
+    return (
+      new URL(CONFIG.BASE_URL, window.location.origin).origin ===
+      window.location.origin
+    )
+  } catch {
+    return false
+  }
+}
 
 export const getGitHubAuthorizeLoginURL = (): string => {
   return `${getPublicServerURL()}/v1/auth/github/authorize`

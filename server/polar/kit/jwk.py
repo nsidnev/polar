@@ -22,15 +22,28 @@ TIP_MESSAGE = (
 
 
 def _validate_jwks(value: Any) -> KeySet:
-    path = pathlib.Path(str(value))
-    if not path.exists() and not path.is_file():
+    raw = str(value).strip()
+
+    # the value might be coming from env vars,
+    # so try to parse JSON first
+    if raw.startswith("{"):
+        try:
+            return JsonWebKey.import_key_set(raw)
+        except ValueError as e:
+            raise ValueError(
+                f"The provided JWKS value is not valid JWKS JSON.\n{TIP_MESSAGE}"
+            ) from e
+
+    # Otherwise treat as file path
+    path = pathlib.Path(raw)
+    if not path.exists() or not path.is_file():
         raise ValueError(
             f"The provided JWKS path {value} is not a valid file path "
             f"or does not exist.\n{TIP_MESSAGE}"
         )
 
     try:
-        with open(value) as f:
+        with open(path) as f:
             content = f.read().strip()
             return JsonWebKey.import_key_set(content)
     except ValueError as e:

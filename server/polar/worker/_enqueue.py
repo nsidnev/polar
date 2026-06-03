@@ -1,6 +1,7 @@
 import contextlib
 import contextvars
 import itertools
+import os
 import time
 import uuid
 from collections import defaultdict
@@ -135,12 +136,16 @@ class JobQueueManager:
             )
             all_messages.append((fn.actor_name, message.encode()))
 
-        for queue_name, messages in queue_messages.items():
-            for batch in itertools.batched(messages, FLUSH_BATCH_SIZE):
-                await self._batch_hset_messages(redis, queue_name, batch)
-                await self._batch_rpush_queue(
-                    redis, queue_name, (message_id for message_id, _ in batch)
-                )
+        if os.getenv("VERCEL"):
+            for _actor_name, encoded_message in all_messages:
+                broker.enqueue(dramatiq.Message.decode(encoded_message))
+        else:
+            for queue_name, messages in queue_messages.items():
+                for batch in itertools.batched(messages, FLUSH_BATCH_SIZE):
+                    await self._batch_hset_messages(redis, queue_name, batch)
+                    await self._batch_rpush_queue(
+                        redis, queue_name, (message_id for message_id, _ in batch)
+                    )
 
         for actor_name, encoded_message in all_messages:
             log.debug(

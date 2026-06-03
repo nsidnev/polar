@@ -168,3 +168,6 @@ server/polar/organization_review/acceptable-use-policy.mdx
 
 .worktrees/
 .vercel
+.vercel/
+.env*.local
+.env*

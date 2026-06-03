@@ -1,5 +1,8 @@
 import contextvars
+import logging
 import logging.config
+import os
+import sys
 import typing
 import uuid
 from typing import Any
@@ -10,6 +13,26 @@ from logfire.integrations.structlog import LogfireProcessor
 from polar.config import settings
 
 Logger = structlog.stdlib.BoundLogger
+
+
+class VercelLoggingHandler(logging.Handler):
+    """Route WARNING+ to stderr, everything else to stdout"""
+
+    def __init__(self, level: int = logging.NOTSET) -> None:
+        super().__init__(level)
+        self._stdout = logging.StreamHandler(sys.stdout)
+        self._stderr = logging.StreamHandler(sys.stderr)
+
+    def setFormatter(self, fmt: logging.Formatter | None) -> None:
+        super().setFormatter(fmt)
+        self._stdout.setFormatter(fmt)
+        self._stderr.setFormatter(fmt)
+
+    def emit(self, record: logging.LogRecord) -> None:
+        if record.levelno >= logging.WARNING:
+            self._stderr.emit(record)
+        else:
+            self._stdout.emit(record)
 
 
 def _map_critical_to_fatal(
@@ -59,66 +82,55 @@ class Logging[RendererType]:
     @classmethod
     def configure_stdlib(cls, *, logfire: bool) -> None:
         level = cls.get_level()
-        logging.config.dictConfig(
-            {
-                "version": 1,
-                "disable_existing_loggers": True,
-                "formatters": {
-                    "polar": {
-                        "()": structlog.stdlib.ProcessorFormatter,
-                        "processors": [
-                            structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-                            cls.get_renderer(),
-                        ],
-                        "foreign_pre_chain": [
-                            structlog.contextvars.merge_contextvars,
-                            structlog.stdlib.add_log_level,
-                            structlog.stdlib.add_logger_name,
-                            structlog.stdlib.PositionalArgumentsFormatter(),
-                            structlog.stdlib.ExtraAdder(),
-                            cls.timestamper,
-                            structlog.processors.UnicodeDecoder(),
-                            structlog.processors.StackInfoRenderer(),
-                            *(
-                                [_map_critical_to_fatal, LogfireProcessor()]
-                                if logfire
-                                else []
-                            ),
-                        ],
-                    },
-                },
-                "handlers": {
-                    "default": {
-                        "level": level,
-                        "class": "logging.StreamHandler",
-                        "formatter": "polar",
-                    },
-                },
-                "loggers": {
-                    "": {
-                        "handlers": ["default"],
-                        "level": level,
-                        "propagate": False,
-                    },
-                    # Propagate third-party loggers to the root one
-                    **{
-                        logger: {
-                            "handlers": [],
-                            "propagate": True,
-                        }
-                        for logger in [
-                            "uvicorn",
-                            "sqlalchemy",
-                            "dramatiq",
-                            "authlib",
-                            "logfire",
-                            "apscheduler",
-                            "reauth",
-                        ]
-                    },
-                },
-            }
+        formatter = structlog.stdlib.ProcessorFormatter(
+            processors=[
+                structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+                cls.get_renderer(),
+            ],
+            foreign_pre_chain=[
+                structlog.contextvars.merge_contextvars,
+                structlog.stdlib.add_log_level,
+                structlog.stdlib.add_logger_name,
+                structlog.stdlib.PositionalArgumentsFormatter(),
+                structlog.stdlib.ExtraAdder(),
+                cls.timestamper,
+                structlog.processors.UnicodeDecoder(),
+                structlog.processors.StackInfoRenderer(),
+                *([_map_critical_to_fatal, LogfireProcessor()] if logfire else []),
+            ],
         )
+
+        # on Vercel, route info/debug to stdout so only warnings/errors
+        # show as [error] in the dashboard.
+        handler: logging.Handler
+        if _is_vercel():
+            handler = VercelLoggingHandler(level)
+        else:
+            handler = logging.StreamHandler()
+            handler.setLevel(level)
+        handler.setFormatter(formatter)
+
+        root = logging.getLogger()
+        root.handlers.clear()
+        root.addHandler(handler)
+        root.setLevel(level)
+
+        for name in [
+            "uvicorn",
+            "sqlalchemy",
+            "dramatiq",
+            "authlib",
+            "logfire",
+            "apscheduler",
+            "reauth",
+        ]:
+            logger = logging.getLogger(name)
+            logger.handlers.clear()
+            logger.propagate = True
+
+        # Silence noisy HTTP client loggers
+        for name in ["httpx", "httpcore"]:
+            logging.getLogger(name).setLevel(logging.WARNING)
 
     @classmethod
     def configure_structlog(cls, *, logfire: bool = False) -> None:
@@ -147,10 +159,19 @@ class Production(Logging[structlog.processors.JSONRenderer]):
         return structlog.processors.JSONRenderer()
 
 
+def _is_vercel() -> bool:
+    return os.environ.get("VERCEL") is not None
+
+
+def _is_vercel_production() -> bool:
+    vercel_env = os.environ.get("VERCEL_ENV")
+    return vercel_env is not None and vercel_env != "development"
+
+
 def configure(*, logfire: bool = False) -> None:
     if settings.is_testing():
         Development.configure(logfire=False)
-    elif settings.is_development():
+    elif settings.is_development() and not _is_vercel_production():
         Development.configure(logfire=logfire)
     else:
         Production.configure(logfire=logfire)

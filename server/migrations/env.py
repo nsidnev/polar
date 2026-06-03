@@ -94,11 +94,16 @@ async def run_migrations_online() -> None:
     if not configuration:
         raise ValueError("No Alembic config found")
 
+    connect_args: dict[str, object] = {}
+    if settings.postgres_ssl_required:
+        connect_args["ssl"] = True
+
     connectable = async_engine_from_config(
         configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
         future=True,
+        connect_args=connect_args,
     )
 
     async with connectable.connect() as connection:

@@ -2,13 +2,14 @@ import uuid
 from datetime import timedelta
 
 import structlog
+from sqlalchemy import select, update
 from sqlalchemy.orm import selectinload
 
 from polar.exceptions import PolarTaskError
 from polar.kit.utils import utc_now
 from polar.locker import Locker
 from polar.logging import Logger
-from polar.models import Subscription, SubscriptionMeter
+from polar.models import Customer, Organization, Subscription, SubscriptionMeter
 from polar.product.repository import ProductRepository
 from polar.subscription.repository import SubscriptionRepository
 from polar.worker import (
@@ -43,6 +44,48 @@ class SubscriptionTierDoesNotExist(SubscriptionTaskError):
             f"The subscription tier with id {subscription_tier_id} does not exist."
         )
         super().__init__(message)
+
+
+@actor(
+    actor_name="subscription.cycle_due",
+    priority=TaskPriority.LOW,
+    cron_trigger=CronTrigger(),
+)
+async def subscription_cycle_due() -> None:
+    async with AsyncSessionMaker() as session:
+        statement = (
+            select(Subscription.id)
+            .join(Customer, onclause=Customer.id == Subscription.customer_id)
+            .join(Organization, onclause=Organization.id == Customer.organization_id)
+            .where(
+                Customer.is_deleted.is_(False),
+                Organization.is_deleted.is_(False),
+                Organization.can_renew_subscriptions.is_(True),
+                Subscription.scheduler_locked_at.is_(None),
+                Subscription.active.is_(True),
+                Subscription.current_period_end.is_not(None),
+                Subscription.current_period_end <= utc_now(),
+            )
+            .order_by(Subscription.current_period_end.asc())
+        )
+        result = await session.execute(statement)
+        subscription_ids = result.scalars().all()
+
+        if subscription_ids:
+            await session.execute(
+                update(Subscription)
+                .where(Subscription.id.in_(subscription_ids))
+                .values(scheduler_locked_at=utc_now())
+            )
+
+    for sid in subscription_ids:
+        enqueue_job("subscription.cycle", subscription_id=sid)
+
+    if subscription_ids:
+        log.info(
+            "subscription.cycle_due.enqueued",
+            count=len(subscription_ids),
+        )
 
 
 @actor(actor_name="subscription.cycle", priority=TaskPriority.LOW)
