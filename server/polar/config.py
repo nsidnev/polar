@@ -4,11 +4,17 @@ import tempfile
 from datetime import timedelta
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Literal
-from urllib.parse import urlparse
+from typing import Annotated, Any, Literal
+from urllib.parse import parse_qs, urlencode, urlparse
 
 from annotated_types import Ge
-from pydantic import AfterValidator, DirectoryPath, Field, PostgresDsn
+from pydantic import (
+    AfterValidator,
+    DirectoryPath,
+    Field,
+    PostgresDsn,
+    model_validator,
+)
 from pydantic_ai.models import Model, infer_model, parse_model_id
 from pydantic_ai.providers.gateway import gateway_provider
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -27,6 +33,11 @@ class Environment(StrEnum):
 
 
 def _validate_email_renderer_binary_path(value: Path) -> Path:
+    # On Vercel the email renderer lives in a separate service, so the binary
+    # isn't present in every service's bundle
+    if os.getenv("VERCEL"):
+        return value
+
     if not value.exists() and not value.is_file():
         raise ValueError(
             f"""
@@ -162,6 +173,8 @@ class Settings(BaseSettings):
     IP_GEOLOCATION_DATABASE_NAME: str = "ip-geolocation.mmdb"
 
     # Database
+    POSTGRES_URL: str | None = None
+    POSTGRES_URL_NON_POOLING: str | None = None
     POSTGRES_USER: str = "polar"
     POSTGRES_PWD: str = "polar"
     POSTGRES_HOST: str = "127.0.0.1"
@@ -180,6 +193,7 @@ class Settings(BaseSettings):
     POSTGRES_READ_DATABASE: str | None = None
 
     # Redis
+    REDIS_URL: str | None = None
     REDIS_HOST: str = "127.0.0.1"
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
@@ -523,6 +537,31 @@ class Settings(BaseSettings):
     TAX_PROCESSORS: list[TaxProcessor] = [TaxProcessor.stripe]
     TAX_RECORD_PROCESSOR: TaxProcessor = TaxProcessor.stripe
 
+    @model_validator(mode="before")
+    @classmethod
+    def _map_vercel_env_vars(cls, values: dict[str, Any]) -> dict[str, Any]:
+        # On Vercel the proxy unifies all services under one origin, so the
+        # Vercel-injected URLs take precedence over .env values
+        if not os.getenv("VERCEL"):
+            return values
+
+        if api_url := os.getenv("API_URL"):
+            values["BASE_URL"] = api_url
+            values["CHECKOUT_BASE_URL"] = (
+                f"{api_url}/v1/checkout-links/{{client_secret}}/redirect"
+            )
+
+        if frontend_url := os.getenv("FRONTEND_URL"):
+            values["FRONTEND_BASE_URL"] = frontend_url
+
+            hostname = urlparse(frontend_url).hostname
+            if hostname:
+                values["USER_SESSION_COOKIE_DOMAIN"] = hostname
+                values["AUTHENTICATION_SESSION_COOKIE_DOMAIN"] = hostname
+                values["OAUTH2_SESSION_STATE_COOKIE_DOMAIN"] = hostname
+
+        return values
+
     model_config = SettingsConfigDict(
         env_prefix="polar_",
         env_file_encoding="utf-8",
@@ -533,9 +572,25 @@ class Settings(BaseSettings):
 
     @property
     def redis_url(self) -> str:
+        if self.REDIS_URL is not None:
+            return self.REDIS_URL
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
     def get_postgres_dsn(self, driver: Literal["asyncpg", "psycopg2"]) -> str:
+        url = self.POSTGRES_URL_NON_POOLING or self.POSTGRES_URL
+        if url is not None:
+            parsed = urlparse(url)
+            query = parsed.query
+            if driver == "asyncpg":
+                # handle unsupported by asyncpg params that
+                # might be injected by integrations
+                params = parse_qs(query)
+                params.pop("channel_binding", None)
+                params.pop("sslmode", None)
+                query = urlencode(params, doseq=True)
+
+            return parsed._replace(scheme=f"postgresql+{driver}", query=query).geturl()
+
         return str(
             PostgresDsn.build(
                 scheme=f"postgresql+{driver}",
@@ -546,6 +601,16 @@ class Settings(BaseSettings):
                 path=self.POSTGRES_DATABASE,
             )
         )
+
+    @property
+    def postgres_ssl_required(self) -> bool:
+        url = self.POSTGRES_URL_NON_POOLING or self.POSTGRES_URL
+        if url is None:
+            return False
+
+        params = parse_qs(urlparse(url).query)
+        sslmode = params.get("sslmode", [None])[0]
+        return sslmode in ("require", "verify-ca", "verify-full")
 
     def is_read_replica_configured(self) -> bool:
         return all(

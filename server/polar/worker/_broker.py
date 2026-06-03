@@ -1,5 +1,6 @@
 import contextlib
 import contextvars
+import os
 from collections.abc import Callable
 from typing import Any, ClassVar
 
@@ -15,6 +16,7 @@ from dramatiq.middleware.group_callbacks import GroupCallbacks
 from dramatiq.rate_limits.backends import RedisBackend as RateLimiterBackend
 from dramatiq.results import Results
 from dramatiq.results.backends import RedisBackend as ResultsBackend
+from vercel.workers.dramatiq import VercelQueuesBroker
 
 from polar.config import settings
 from polar.logfire import instrument_httpx
@@ -59,6 +61,27 @@ class MaxRetriesMiddleware(dramatiq.Middleware):
             "max_retries", actor.options.get("max_retries", settings.WORKER_MAX_RETRIES)
         )
         message.options["max_retries"] = max_retries
+
+
+class VercelDummyRetryMiddleware(dramatiq.Middleware):
+    """Declare retry-related actor options without acting on them.
+
+    On Vercel the Queue platform owns retries, so dramatiq's Retries
+    middleware is omitted. But if actors declare options like
+    `max_retries`/`min_backoff` then dramatiq rejects unknown actor options
+    unless some other middleware lists them.
+    """
+
+    @property
+    def actor_options(self) -> set[str]:
+        return {
+            "max_retries",
+            "min_backoff",
+            "max_backoff",
+            "retry_when",
+            "throws",
+            "on_retry_exhausted",
+        }
 
 
 class SchedulerMiddleware(dramatiq.Middleware):
@@ -184,6 +207,22 @@ def get_broker() -> dramatiq.Broker:
     result_backend = ResultsBackend(url=settings.redis_url, encoder=JSONEncoder())
     rate_limiter_backend = RateLimiterBackend(url=settings.redis_url)
 
+    is_vercel = bool(os.getenv("VERCEL"))
+
+    # On Vercel the Vercel Queues own retries, so we don't need retry middlewares there
+    retry_middleware: list[dramatiq.Middleware] = (
+        [VercelDummyRetryMiddleware()]
+        if is_vercel
+        else [
+            OperationalErrorMiddleware(),
+            MaxRetriesMiddleware(),
+            middleware.Retries(
+                max_retries=settings.WORKER_MAX_RETRIES,
+                min_backoff=settings.WORKER_MIN_BACKOFF_MILLISECONDS,
+            ),
+        ]
+    )
+
     middleware_list = [
         # Infrastructure & async support
         middleware.ShutdownNotifications(),
@@ -204,25 +243,21 @@ def get_broker() -> dramatiq.Broker:
         PrometheusMiddleware(),
         # Message flow control
         DebounceMiddleware(redis_pool),
-        # Retry & execution control (MaxRetries must precede Retries)
-        OperationalErrorMiddleware(),
-        MaxRetriesMiddleware(),
-        middleware.Retries(
-            max_retries=settings.WORKER_MAX_RETRIES,
-            min_backoff=settings.WORKER_MIN_BACKOFF_MILLISECONDS,
-        ),
+        # Retry & execution control (Redis only)
+        *retry_middleware,
         middleware.AgeLimit(),
         middleware.TimeLimit(time_limit=60_000),
         middleware.CurrentMessage(),
     ]
 
-    broker = RedisBroker(
+    if is_vercel:
+        return VercelQueuesBroker(middleware=middleware_list)
+
+    return RedisBroker(
         connection_pool=redis_pool,
         middleware=middleware_list,
         dead_message_ttl=3600 * 1000,  # 1 hour in milliseconds
     )
-
-    return broker
 
 
 __all__ = [
