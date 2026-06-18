@@ -65,9 +65,9 @@ dependencies = [
   "polar-sdk==0.31.7",
   "anyio>=4.13.0",
   "markdown-it-py>=4.2.0",
+  "tzdata>=2026.2",
   "reauth==0.1.8",
   # Vercel-specific
-  "tzdata>=2026.2",
   "vercel-workers[dramatiq]==0.0.24",
   "vercel==0.5.9",
 ]
@@ -118,7 +118,6 @@ lint_check = { cmd = "ruff format --check . && ruff check . && task lint_subquer
 lint_subquery = { cmd = "python scripts/lint_subquery.py", help = "flag .subquery() calls that don't narrow columns" }
 lint_types = { cmd = "mypy --num-workers 2 polar scripts tests", help = "run mypy type verify" }
 db_migrate = { cmd = "python -m scripts.db upgrade", help = "run alembic upgrade" }
-download_ipinfo = { cmd = "python -m polar.checkout.ip_geolocation", help = "download IPInfo country/ASN database (reads IPINFO_ACCESS_TOKEN env var, skips if unset)" }
 db_recreate = { cmd = "python -m scripts.db recreate", help = "drop and recreate database" }
 db_reparent = { cmd = "python -m scripts.db reparent", help = "try to auto-fix conflicting migrations" }
 tb_deploy = { cmd = "python -m scripts.tinybird", help = "deploy tinybird datasources" }
@@ -130,7 +129,6 @@ seeds_load = { cmd = "python -m scripts.seeds_load", help = "load sample/test da
 enable_payments = { cmd = "python -m scripts.enable_payments", help = "enable payments for an organization by slug" }
 loadtest_setup = { cmd = "python -m scripts.loadtest_setup", help = "setup load test data for event ingestion" }
 pre_deploy = { cmd = "task db_migrate", help = "Pre-deploy command run by Render" }
-vercel_browser_sandbox = { cmd = "python -m scripts.vercel_build_browser_sandbox", help = "build a Vercel Sandbox snapshot for the remote Chromium" }
 
 [tool.pytest.ini_options]
 markers = ["auth"]

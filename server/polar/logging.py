@@ -1,7 +1,6 @@
 import contextvars
 import logging
 import logging.config
-import os
 import sys
 import typing
 import uuid
@@ -86,7 +85,7 @@ class Logging[RendererType]:
         # only the latter show as [error] in the dashboard.
         handler_class = (
             "polar.logging.VercelLoggingHandler"
-            if _is_vercel()
+            if settings.is_vercel()
             else "logging.StreamHandler"
         )
         logging.config.dictConfig(
@@ -177,19 +176,10 @@ class Production(Logging[structlog.processors.JSONRenderer]):
         return structlog.processors.JSONRenderer()
 
 
-def _is_vercel() -> bool:
-    return os.environ.get("VERCEL") is not None
-
-
-def _is_vercel_production() -> bool:
-    vercel_env = os.environ.get("VERCEL_ENV")
-    return vercel_env is not None and vercel_env != "development"
-
-
 def configure(*, logfire: bool = False) -> None:
     if settings.is_testing():
         Development.configure(logfire=False)
-    elif settings.is_development() and not _is_vercel_production():
+    elif settings.is_development():
         Development.configure(logfire=logfire)
     else:
         Production.configure(logfire=logfire)

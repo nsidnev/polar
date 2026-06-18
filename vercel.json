@@ -18,7 +18,7 @@
       "root": "server",
       "entrypoint": "polar.app:app",
       "mount": "/api",
-      "buildCommand": "export PATH=/pnpm10/node_modules/.bin:$PATH && uv run task backoffice && uv run task download_ipinfo",
+      "buildCommand": "export PATH=/pnpm10/node_modules/.bin:$PATH && uv run task backoffice",
       "preDeployCommand": "uv run --no-sync task db_migrate"
     },
     "worker": {
@@ -35,7 +35,7 @@
         "tinybird",
         "invoices-and-receipts"
       ],
-      "buildCommand": "export PATH=/pnpm10/node_modules/.bin:$PATH && uv run task emails && uv run task vercel_browser_sandbox"
+      "buildCommand": "export PATH=/pnpm10/node_modules/.bin:$PATH && uv run task emails"
     },
     "cron": {
       "type": "job",

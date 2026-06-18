@@ -1,4 +1,3 @@
-import os
 import uuid
 from datetime import timedelta
 
@@ -6,6 +5,7 @@ import structlog
 from sqlalchemy import update
 from sqlalchemy.orm import selectinload
 
+from polar.config import settings
 from polar.exceptions import PolarTaskError
 from polar.kit.utils import utc_now
 from polar.locker import Locker
@@ -232,7 +232,7 @@ async def send_trial_conversion_reminder(subscription_id: uuid.UUID) -> None:
 @actor(
     actor_name="subscription.cycle_due",
     priority=TaskPriority.LOW,
-    cron_trigger=CronTrigger() if os.getenv("VERCEL") else None,
+    cron_trigger=CronTrigger() if settings.is_vercel() else None,
 )
 async def subscription_cycle_due() -> None:
     async with AsyncSessionMaker() as session:

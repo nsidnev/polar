@@ -1,5 +1,4 @@
 import argparse
-import os
 import sys
 from typing import Annotated, cast
 
@@ -84,21 +83,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Download the IP to Country ASN database."
     )
-    parser.add_argument(
-        "access_token",
-        type=str,
-        nargs="?",
-        default=os.environ.get("IPINFO_ACCESS_TOKEN"),
-        help="IPInfo access token (defaults to IPINFO_ACCESS_TOKEN env var)",
-    )
+    parser.add_argument("access_token", type=str, help="IPInfo access token")
     args = parser.parse_args()
-
-    if not args.access_token:
-        sys.stderr.write(
-            "IPINFO_ACCESS_TOKEN not set; skipping IP geolocation database download. "
-            "Checkout will run without automatic IP-to-country resolution.\n"
-        )
-        sys.exit(0)
 
     _download_database(args.access_token)
     sys.stdout.write(f"Database downloaded to {DATABASE_PATH}\n")

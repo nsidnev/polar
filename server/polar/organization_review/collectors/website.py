@@ -5,7 +5,7 @@ import functools
 import re
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from urllib.parse import urljoin, urlparse
 
 import httpx
@@ -18,12 +18,8 @@ from polar.config import settings
 from polar.kit.http import SSRFBlockedError, resolve_and_validate_ip
 from polar.observability.baggage import organization_baggage
 
-from ..sandbox import is_vercel_runtime, provision_browser_sandbox
 from ..schemas import UsageInfo, WebsiteData, WebsitePage
 from .firecrawl_client import scrape_markdown
-
-if TYPE_CHECKING:
-    from vercel.sandbox import AsyncSandbox
 
 log = structlog.get_logger(__name__)
 
@@ -131,25 +127,12 @@ class WebsiteDeps:
     _playwright: Playwright | None = field(default=None, repr=False)
     _browser: Browser | None = field(default=None, repr=False)
     _browser_page: Page | None = field(default=None, repr=False)
-    # Vercel-only: the Sandbox running the remote Chromium. None on Render/local.
-    _sandbox: AsyncSandbox | None = field(default=None, repr=False)
 
     async def get_browser_page(self) -> Page:
-        """Lazily launch a headless browser and return its page.
-
-        On Vercel where in-process Chromium can't launch on Fluid Compute the
-        browser runs in a short-lived Sandbox we connect to over Playwright's
-        wss protocol, everywhere else it's launched in-process.
-        """
+        """Lazily launch a headless browser and return its page."""
         if self._browser_page is None:
             self._playwright = await async_playwright().start()
-            if is_vercel_runtime():
-                self._sandbox, ws_url = await provision_browser_sandbox(
-                    self.allowed_domain
-                )
-                self._browser = await self._playwright.chromium.connect(ws_url)
-            else:
-                self._browser = await self._playwright.chromium.launch(headless=True)
+            self._browser = await self._playwright.chromium.launch(headless=True)
             context = await self._browser.new_context(
                 user_agent=_USER_AGENT,
                 java_script_enabled=True,
@@ -217,11 +200,6 @@ class WebsiteDeps:
                 await self._playwright.stop()
         except Exception:
             log.warning("website_collector.playwright_stop_failed", exc_info=True)
-        try:
-            if self._sandbox is not None:
-                await self._sandbox.stop()
-        except Exception:
-            log.warning("website_collector.sandbox_stop_failed", exc_info=True)
 
 
 # ---------------------------------------------------------------------------

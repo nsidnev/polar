@@ -1,7 +1,6 @@
 import contextlib
 import contextvars
 import itertools
-import os
 import time
 import uuid
 from collections import defaultdict
@@ -91,8 +90,6 @@ class JobQueueManager:
             sqs_jobs = []
             redis_jobs = self._enqueued_jobs
 
-        is_vercel = bool(os.getenv("VERCEL"))
-
         queue_messages = defaultdict[str, list[tuple[str, Any]]](list)
         all_messages: list[tuple[str, Any]] = []
 
@@ -127,7 +124,7 @@ class JobQueueManager:
                 else:
                     delay = debounce_delay
 
-            if is_vercel:
+            if settings.is_vercel():
                 # don't use dq_name with Vercel Queues, because it has no ".DQ" queues
                 vercel_messages.append((message, delay))
                 all_messages.append((fn.actor_name, message.encode()))
@@ -149,7 +146,7 @@ class JobQueueManager:
             )
             all_messages.append((fn.actor_name, message.encode()))
 
-        if is_vercel:
+        if settings.is_vercel():
             for message, delay in vercel_messages:
                 if delay is not None and delay > 0:
                     broker.enqueue(message, delay=delay)

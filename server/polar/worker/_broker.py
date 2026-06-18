@@ -1,6 +1,5 @@
 import contextlib
 import contextvars
-import os
 from collections.abc import Callable
 from typing import Any, ClassVar
 
@@ -207,7 +206,7 @@ def get_broker() -> dramatiq.Broker:
     result_backend = ResultsBackend(url=settings.redis_url, encoder=JSONEncoder())
     rate_limiter_backend = RateLimiterBackend(url=settings.redis_url)
 
-    is_vercel = bool(os.getenv("VERCEL"))
+    is_vercel = settings.is_vercel()
 
     # On Vercel the Vercel Queues own retries, so we don't need retry middlewares there
     retry_middleware: list[dramatiq.Middleware] = (

@@ -1,5 +1,6 @@
-import os
 from enum import IntEnum, StrEnum
+
+from polar.config import settings
 
 
 class TaskPriority(IntEnum):
@@ -10,7 +11,7 @@ class TaskPriority(IntEnum):
 
 def _queue_name(name: str) -> str:
     # Vercel Queues topics must not contain underscores, so hyphenate here
-    return name.replace("_", "-") if os.getenv("VERCEL") else name
+    return name.replace("_", "-") if settings.is_vercel() else name
 
 
 class TaskQueue(StrEnum):

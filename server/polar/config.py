@@ -5,7 +5,7 @@ from datetime import timedelta
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any, Literal
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import urlparse
 
 from annotated_types import Ge
 from pydantic import (
@@ -30,6 +30,14 @@ class Environment(StrEnum):
     sandbox = "sandbox"
     production = "production"
     test = "test"  # Used for the test environment in Render
+
+
+# Vercel services are used for development and test environment only
+_VERCEL_ENV_TO_ENVIRONMENT: dict[str, Environment] = {
+    "development": Environment.development,  # vc dev
+    "preview": Environment.test,
+    "production": Environment.test,
+}
 
 
 def _validate_email_renderer_binary_path(value: Path) -> Path:
@@ -173,8 +181,6 @@ class Settings(BaseSettings):
     IP_GEOLOCATION_DATABASE_NAME: str = "ip-geolocation.mmdb"
 
     # Database
-    POSTGRES_URL: str | None = None
-    POSTGRES_URL_NON_POOLING: str | None = None
     POSTGRES_USER: str = "polar"
     POSTGRES_PWD: str = "polar"
     POSTGRES_HOST: str = "127.0.0.1"
@@ -193,7 +199,6 @@ class Settings(BaseSettings):
     POSTGRES_READ_DATABASE: str | None = None
 
     # Redis
-    REDIS_URL: str | None = None
     REDIS_HOST: str = "127.0.0.1"
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
@@ -357,6 +362,9 @@ class Settings(BaseSettings):
 
     MINIO_USER: str = "polar"
     MINIO_PWD: str = "polarpolar"
+
+    # Vercel
+    VERCEL_ENV: str | None = None
 
     # Chargeback Stop
     CHARGEBACK_STOP_WEBHOOK_SECRET: str = ""
@@ -540,11 +548,14 @@ class Settings(BaseSettings):
     @model_validator(mode="before")
     @classmethod
     def _map_vercel_env_vars(cls, values: dict[str, Any]) -> dict[str, Any]:
-        # On Vercel the proxy unifies all services under one origin, so the
-        # Vercel-injected URLs take precedence over .env values
-        if not os.getenv("VERCEL"):
+        vercel_env = os.getenv("VERCEL_ENV")
+        if not vercel_env:
             return values
 
+        values["VERCEL_ENV"] = vercel_env
+
+        # On Vercel the proxy unifies all services under one origin, so the
+        # Vercel-injected URLs take precedence over .env values
         if api_url := os.getenv("API_URL"):
             values["BASE_URL"] = api_url
             values["CHECKOUT_BASE_URL"] = (
@@ -570,27 +581,14 @@ class Settings(BaseSettings):
         extra="allow",
     )
 
+    def is_vercel(self) -> bool:
+        return self.VERCEL_ENV is not None
+
     @property
     def redis_url(self) -> str:
-        if self.REDIS_URL is not None:
-            return self.REDIS_URL
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
     def get_postgres_dsn(self, driver: Literal["asyncpg", "psycopg2"]) -> str:
-        url = self.POSTGRES_URL_NON_POOLING or self.POSTGRES_URL
-        if url is not None:
-            parsed = urlparse(url)
-            query = parsed.query
-            if driver == "asyncpg":
-                # handle unsupported by asyncpg params that
-                # might be injected by integrations
-                params = parse_qs(query)
-                params.pop("channel_binding", None)
-                params.pop("sslmode", None)
-                query = urlencode(params, doseq=True)
-
-            return parsed._replace(scheme=f"postgresql+{driver}", query=query).geturl()
-
         return str(
             PostgresDsn.build(
                 scheme=f"postgresql+{driver}",
@@ -601,16 +599,6 @@ class Settings(BaseSettings):
                 path=self.POSTGRES_DATABASE,
             )
         )
-
-    @property
-    def postgres_ssl_required(self) -> bool:
-        url = self.POSTGRES_URL_NON_POOLING or self.POSTGRES_URL
-        if url is None:
-            return False
-
-        params = parse_qs(urlparse(url).query)
-        sslmode = params.get("sslmode", [None])[0]
-        return sslmode in ("require", "verify-ca", "verify-full")
 
     def is_read_replica_configured(self) -> bool:
         return all(
@@ -641,7 +629,11 @@ class Settings(BaseSettings):
         )
 
     def is_environment(self, environments: set[Environment]) -> bool:
-        return self.ENV in environments
+        env = self.ENV
+        if self.VERCEL_ENV is not None:
+            env = _VERCEL_ENV_TO_ENVIRONMENT.get(self.VERCEL_ENV, env)
+
+        return env in environments
 
     def is_development(self) -> bool:
         return self.is_environment({Environment.development})

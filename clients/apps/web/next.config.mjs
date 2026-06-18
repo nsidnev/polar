@@ -279,9 +279,8 @@ const nextConfig = {
       // Redirect /dashboard to correct domain if on a different domain name
       // Skip in preview builds — preview env uses a single domain via Caddy proxy
       // and under Vercel services deployment
-      ...(previewBasePath || process.env.VERCEL)
-        ? []
-        : [
+      ...(!(previewBasePath || process.env.VERCEL)
+        ? [
             {
               source: '/dashboard/:path*',
               destination: `https://${defaultFrontendHostname}/dashboard/:path*`,
@@ -298,7 +297,8 @@ const nextConfig = {
               ],
               permanent: false,
             },
-          ]),
+          ]
+        : []),
 
       {
         source: '/maintainer',
