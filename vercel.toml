@@ -45,3 +45,6 @@ VERCEL_RUNTIME_PYTHON = "vercel-runtime @ https://vercel-dy8fg8anq.vercel.sh/tar
 # classic Lambda caps; build it as a large function (up to 5 GB uncompressed).
 # The builder reads this at build time, so it must be build env, not [env].
 VERCEL_SUPPORT_LARGE_FUNCTIONS = "1"
+# Services deployments don't wire the Next image optimizer yet, so /_next/image
+# 404s; serve images unoptimized until that lands.
+NEXT_IMAGE_UNOPTIMIZED = "1"
