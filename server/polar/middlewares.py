@@ -83,6 +83,26 @@ class FlushEnqueuedWorkerJobsMiddleware:
             await self.app(scope, receive, send)
 
 
+class RootPathMiddleware:
+    """Set the ASGI root_path for requests arriving through a path prefix.
+
+    Routing is unaffected (PathRewriteMiddleware aliases the path itself);
+    this only makes generated URLs (url_for OAuth redirects, request.base_url)
+    keep the prefix, so they stay reachable on the host that served them.
+    """
+
+    def __init__(self, app: ASGIApp, prefix: str) -> None:
+        self.app = app
+        self.prefix = prefix
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] in ("http", "websocket"):
+            path = scope["path"]
+            if path == self.prefix or path.startswith(f"{self.prefix}/"):
+                scope["root_path"] = self.prefix
+        await self.app(scope, receive, send)
+
+
 class PathRewriteMiddleware:
     def __init__(
         self, app: ASGIApp, pattern: str | re.Pattern[str], replacement: str

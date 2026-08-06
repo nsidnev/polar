@@ -1,0 +1,43 @@
+# Polar on Vercel: the Next.js frontend and the FastAPI API deploy as two
+# services from this one config. The API service builds from
+# server/pyproject.toml (see [tool.vercel] there).
+
+[services.web]
+root = "clients/apps/web"
+# Explicit because the config pre-compilation install at the repo root marks
+# installs completed, silently skipping the default install for this
+# workspace (its lockfile lives in clients/, not the repo root).
+installCommand = "pnpm install"
+buildCommand = "cd ../.. && turbo run build --filter=web"
+
+[services.api]
+root = "server"
+entrypoint = "pyproject.toml"
+# Emails render through a self-contained Node binary that is normally a local
+# build artifact; build it here so it ships in the Function bundle.
+buildCommand = "export PATH=/pnpm10/node_modules/.bin:$PATH && uv run task emails"
+
+# An api.* host serves the whole API at its native paths, mirroring the
+# polar.sh / api.polar.sh split. On the app origin the API is exposed under
+# /api/v1 only, forwarded unstripped: the app itself aliases /api/v1 to /v1
+# (PathRewriteMiddleware) and keeps generated URLs prefixed
+# (RootPathMiddleware), so the platform never rewrites paths.
+
+[[rewrites]]
+source = "/:path(.*)"
+has = [{ type = "host", value = { pre = "api." } }]
+destination = { type = "service", service = "api" }
+
+[[rewrites]]
+source = "/api/v1/:path(.*)?"
+destination = { type = "service", service = "api" }
+
+[[rewrites]]
+source = "/:path(.*)"
+destination = { type = "service", service = "web" }
+
+# Pinned pre-release builder and Python runtime; drop once the services
+# rollout reaches the stable channel.
+[build.env]
+VERCEL_CLI_VERSION = "vercel@https://vercel-dy8fg8anq.vercel.sh/tarballs/vercel.tgz"
+VERCEL_RUNTIME_PYTHON = "vercel-runtime @ https://vercel-dy8fg8anq.vercel.sh/tarballs/vercel_runtime-0.19.0.dev1785967720+39f12a6-py3-none-any.whl"

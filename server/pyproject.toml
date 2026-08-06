@@ -201,3 +201,6 @@ exclude-newer-package = { reauth = false, polar-sdk = false } # Reauth and the P
 
 [tool.uv.sources]
 dramatiq = { git = "https://github.com/frankie567/dramatiq", rev = "memory-leak-asyncio-ter" }
+
+[tool.vercel]
+entrypoint = "polar.app:app"

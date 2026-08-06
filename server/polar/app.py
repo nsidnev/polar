@@ -1,4 +1,5 @@
 import contextlib
+import os
 from collections.abc import AsyncIterator
 from typing import TypedDict
 
@@ -43,6 +44,7 @@ from polar.middlewares import (
     MaxBodySizeMiddleware,
     OperationalErrorMiddleware,
     PathRewriteMiddleware,
+    RootPathMiddleware,
     SandboxResponseHeaderMiddleware,
 )
 from polar.oauth2.endpoints.well_known import router as well_known_router
@@ -222,6 +224,10 @@ def create_app() -> FastAPI:
         app.add_middleware(AsyncSessionMiddleware)
         app.add_middleware(rate_limit.get_middleware, redis=rate_limit_redis)
     app.add_middleware(PathRewriteMiddleware, pattern=r"^/api/v1", replacement="/v1")
+    if os.environ.get("VERCEL"):
+        # On Vercel the app origin mounts the API at /api (api.* hosts serve
+        # it unprefixed), so prefixed requests must generate prefixed URLs.
+        app.add_middleware(RootPathMiddleware, prefix="/api")
     app.add_middleware(LogCorrelationIdMiddleware)
     app.add_middleware(MaxBodySizeMiddleware, limit=settings.API_MAX_REQUEST_BODY_SIZE)
     if not settings.is_testing():

@@ -28,6 +28,12 @@ class Environment(StrEnum):
 
 
 def _validate_email_renderer_binary_path(value: Path) -> Path:
+    # On Vercel the renderer binary is produced by the service build (see
+    # vercel.toml) and shipped in the bundle, but imports also run at build
+    # time before it exists; the build step is the guarantee there, not this.
+    if os.getenv("VERCEL"):
+        return value
+
     if not value.exists() and not value.is_file():
         raise ValueError(
             f"""
