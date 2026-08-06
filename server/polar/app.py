@@ -227,6 +227,8 @@ def create_app() -> FastAPI:
     if os.environ.get("VERCEL"):
         # On Vercel the app origin mounts the API at /api (api.* hosts serve
         # it unprefixed), so prefixed requests must generate prefixed URLs.
+        # Routing still works because route matching strips the root_path
+        # (or, for /api/v1, because the alias above rewrote the path).
         app.add_middleware(RootPathMiddleware, prefix="/api")
     app.add_middleware(LogCorrelationIdMiddleware)
     app.add_middleware(MaxBodySizeMiddleware, limit=settings.API_MAX_REQUEST_BODY_SIZE)

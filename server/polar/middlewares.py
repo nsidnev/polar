@@ -86,9 +86,10 @@ class FlushEnqueuedWorkerJobsMiddleware:
 class RootPathMiddleware:
     """Set the ASGI root_path for requests arriving through a path prefix.
 
-    Routing is unaffected (PathRewriteMiddleware aliases the path itself);
-    this only makes generated URLs (url_for OAuth redirects, request.base_url)
-    keep the prefix, so they stay reachable on the host that served them.
+    Route matching strips the root_path, so prefixed paths resolve without
+    per-route aliases, and everything derived from the request (url_for,
+    request.base_url, redirect Locations) keeps the prefix. Paths already
+    rewritten by an alias (/api/v1) are left alone by the matcher.
     """
 
     def __init__(self, app: ASGIApp, prefix: str) -> None:

@@ -21,15 +21,17 @@ env = "POLAR_API_URL"
 [services.api]
 root = "server"
 entrypoint = "pyproject.toml"
-# Emails render through a self-contained Node binary that is normally a local
-# build artifact; build it here so it ships in the Function bundle.
-buildCommand = "export PATH=/pnpm10/node_modules/.bin:$PATH && uv run task emails"
+# The email renderer (a self-contained Node binary) and the backoffice CSS/JS
+# are normally local build artifacts; build them here so they ship in the
+# Function bundle.
+buildCommand = "export PATH=/pnpm10/node_modules/.bin:$PATH && uv run task emails && uv run task backoffice"
 
 # An api.* host serves the whole API at its native paths, mirroring the
 # polar.sh / api.polar.sh split. On the app origin the API is exposed under
-# /api/v1 only, forwarded unstripped: the app itself aliases /api/v1 to /v1
-# (PathRewriteMiddleware) and keeps generated URLs prefixed
-# (RootPathMiddleware), so the platform never rewrites paths.
+# /api/v1 (plus the staff backoffice under /api/backoffice), forwarded
+# unstripped: the app handles the prefix itself (the long-standing /api/v1
+# alias, root_path for the rest), so the platform never rewrites paths and
+# generated URLs stay correct on both hosts.
 
 [[rewrites]]
 source = "/:path(.*)"
@@ -38,6 +40,10 @@ destination = { type = "service", service = "api" }
 
 [[rewrites]]
 source = "/api/v1/:path(.*)?"
+destination = { type = "service", service = "api" }
+
+[[rewrites]]
+source = "/api/backoffice/:path(.*)?"
 destination = { type = "service", service = "api" }
 
 [[rewrites]]
