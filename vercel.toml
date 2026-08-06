@@ -51,3 +51,6 @@ VERCEL_SUPPORT_LARGE_FUNCTIONS = "1"
 # Services deployments don't wire the Next image optimizer yet, so /_next/image
 # 404s; serve images unoptimized until that lands.
 NEXT_IMAGE_UNOPTIMIZED = "1"
+# The browser reaches the API same-origin under /api on every deployment URL;
+# SSR uses the service binding (POLAR_API_URL) instead.
+NEXT_PUBLIC_API_URL = "/api"
