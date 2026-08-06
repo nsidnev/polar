@@ -9,9 +9,14 @@ root = "clients/apps/web"
 # workspace (its lockfile lives in clients/, not the repo root).
 installCommand = "pnpm install"
 buildCommand = "cd ../.. && turbo run build --filter=web"
+
 # SSR calls the API privately over the binding; polar's server-side code
 # already prefers POLAR_API_URL, and the injected URL tracks each deployment.
-bindings = [{ type = "service", service = "api", format = "url", env = "POLAR_API_URL" }]
+[[services.web.bindings]]
+type = "service"
+service = "api"
+format = "url"
+env = "POLAR_API_URL"
 
 [services.api]
 root = "server"
