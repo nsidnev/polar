@@ -197,6 +197,9 @@ class Settings(BaseSettings):
     REDIS_HOST: str = "127.0.0.1"
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
+    # Full connection URL override; the host/port/db parts above cannot
+    # express auth or TLS (rediss://), which managed Redis requires.
+    REDIS_URL: str | None = None
 
     # Emails
     EMAIL_RENDERER_BINARY_PATH: Annotated[
@@ -590,6 +593,8 @@ class Settings(BaseSettings):
 
     @property
     def redis_url(self) -> str:
+        if self.REDIS_URL:
+            return self.REDIS_URL
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
     def _build_postgres_dsn(
