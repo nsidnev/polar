@@ -1,5 +1,6 @@
 import contextlib
 import contextvars
+import os
 from collections.abc import Callable
 from typing import Any, ClassVar
 
@@ -245,6 +246,15 @@ def get_broker(*, database: bool = True) -> dramatiq.Broker:
         middleware.TimeLimit(time_limit=60_000),
         middleware.CurrentMessage(),
     ]
+
+    if os.environ.get("VERCEL"):
+        # On Vercel the transport is Vercel Queues: sends publish to topics
+        # and deliveries push into the subscriber Function declared in
+        # pyproject.toml. The import is local because vercel-dramatiq is
+        # installed by the Vercel build, not declared as a dependency.
+        from vercel.integrations.dramatiq import VercelQueueBroker
+
+        return VercelQueueBroker(middleware=middleware_list)
 
     broker = RoutingRedisBroker(
         connection_pool=redis_pool,
