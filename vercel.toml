@@ -54,8 +54,7 @@ destination = { type = "service", service = "web" }
 # Pinned pre-release builder and Python runtime; drop once the services
 # rollout reaches the stable channel.
 [build.env]
-VERCEL_CLI_VERSION = "vercel@https://vercel-mdcd0txsn.vercel.sh/tarballs/vercel.tgz"
-VERCEL_RUNTIME_PYTHON = "vercel-runtime @ https://vercel-dy8fg8anq.vercel.sh/tarballs/vercel_runtime-0.19.0.dev1785967720+39f12a6-py3-none-any.whl"
+VERCEL_CLI_VERSION = "vercel@https://vercel-6yhco439f.vercel.sh/tarballs/vercel.tgz"
 # The api bundle (Python deps plus the email renderer binary) exceeds the
 # classic Lambda caps; build it as a large function (up to 5 GB uncompressed).
 # The builder reads this at build time, so it must be build env, not [env].

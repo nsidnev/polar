@@ -200,12 +200,10 @@ warn_untyped_fields = true
 
 [tool.uv]
 exclude-newer = "1 week"
-exclude-newer-package = { reauth = false, polar-sdk = false } # Reauth and the Polar SDK are brand new, but remember to remove these exclusions when stabilized
+exclude-newer-package = { reauth = false, polar-sdk = false, vercel-apscheduler = false } # Reauth and the Polar SDK are brand new, but remember to remove these exclusions when stabilized
 
 [tool.uv.sources]
 dramatiq = { git = "https://github.com/frankie567/dramatiq", rev = "memory-leak-asyncio-ter" }
-# Not on PyPI yet; drop the git source once vercel-apscheduler is published.
-vercel-apscheduler = { git = "https://github.com/vercel/vercel-py", subdirectory = "integrations/vercel-apscheduler", branch = "nsidnev/aps-cache-backend" }
 
 [tool.vercel]
 entrypoint = "polar.app:app"
