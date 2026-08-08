@@ -5,10 +5,10 @@ from datetime import timedelta
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Literal
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from annotated_types import Ge
-from pydantic import AfterValidator, DirectoryPath, Field, PostgresDsn
+from pydantic import AfterValidator, DirectoryPath, Field, PostgresDsn, model_validator
 from pydantic_ai.models import Model, infer_model, parse_model_id
 from pydantic_ai.providers.gateway import gateway_provider
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -178,6 +178,11 @@ class Settings(BaseSettings):
     POSTGRES_PORT_FALLBACK: int | None = None
     POSTGRES_DATABASE: str = "polar"
     POSTGRES_SSL: bool = False
+    # Full connection URL override; managed database integrations inject it
+    # (e.g. Supabase's session-mode pooler URL) alongside individual parts
+    # that may point at a host unreachable from this network (IPv6-only).
+    # When set, its components take precedence over the parts above.
+    POSTGRES_URL_NON_POOLING: str | None = None
     DATABASE_POOL_SIZE: int = 5
     DATABASE_SYNC_POOL_SIZE: int = 1  # Specific pool size for sync connection: since we only use it in OAuth2 router, don't waste resources.
     DATABASE_POOL_RECYCLE_SECONDS: int = 600  # 10 minutes
@@ -596,6 +601,33 @@ class Settings(BaseSettings):
         if self.REDIS_URL:
             return self.REDIS_URL
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+
+    @model_validator(mode="after")
+    def apply_postgres_url_non_pooling(self) -> "Settings":
+        if self.POSTGRES_URL_NON_POOLING is None:
+            return self
+
+        url = urlparse(self.POSTGRES_URL_NON_POOLING)
+        if url.scheme not in ("postgres", "postgresql"):
+            raise ValueError(
+                "POSTGRES_URL_NON_POOLING must be a postgres:// or postgresql:// URL"
+            )
+
+        if url.username:
+            self.POSTGRES_USER = unquote(url.username)
+        if url.password:
+            self.POSTGRES_PWD = unquote(url.password)
+        if url.hostname:
+            self.POSTGRES_HOST = url.hostname
+        if url.port:
+            self.POSTGRES_PORT = url.port
+        database = url.path.lstrip("/")
+        if database:
+            self.POSTGRES_DATABASE = database
+        sslmode = parse_qs(url.query).get("sslmode", [None])[0]
+        if sslmode is not None:
+            self.POSTGRES_SSL = sslmode != "disable"
+        return self
 
     def _build_postgres_dsn(
         self,
