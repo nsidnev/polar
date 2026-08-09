@@ -46,6 +46,7 @@ from polar.middlewares import (
     PathRewriteMiddleware,
     RootPathMiddleware,
     SandboxResponseHeaderMiddleware,
+    TrailingSlashRestoreMiddleware,
 )
 from polar.oauth2.endpoints.well_known import router as well_known_router
 from polar.oauth2.exception_handlers import OAuth2Error, oauth2_error_exception_handler
@@ -223,6 +224,12 @@ def create_app() -> FastAPI:
         app.add_middleware(FlushEnqueuedWorkerJobsMiddleware)
         app.add_middleware(AsyncSessionMiddleware)
         app.add_middleware(rate_limit.get_middleware, redis=rate_limit_redis)
+    if os.environ.get("VERCEL"):
+        # The service-binding proxy strips trailing slashes, which would turn
+        # the router's redirect_slashes 307 into an infinite loop for
+        # collection endpoints; restore the slash instead of redirecting.
+        # Added before PathRewriteMiddleware so it sees the rewritten path.
+        app.add_middleware(TrailingSlashRestoreMiddleware, routes=app.router.routes)
     app.add_middleware(PathRewriteMiddleware, pattern=r"^/api/v1", replacement="/v1")
     if os.environ.get("VERCEL"):
         # On Vercel the app origin mounts the API at /api (api.* hosts serve
