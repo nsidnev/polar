@@ -27,6 +27,17 @@ class Environment(StrEnum):
     test = "test"  # Used for the test environment in Render
 
 
+def _validate_cookie_domain(value: str) -> str | None:
+    # On Vercel, deployment URLs change with every deployment, so the
+    # local-dev default domain can never match the serving host and the
+    # browser would reject the cookie. Dropping the Domain attribute makes
+    # it a host-only cookie, valid on whichever host served the request.
+    # An explicitly configured domain (custom production domains) is kept.
+    if os.getenv("VERCEL") and value == "127.0.0.1":
+        return None
+    return value
+
+
 def _validate_email_renderer_binary_path(value: Path) -> Path:
     # On Vercel the renderer binary is produced by the service build (see
     # vercel.toml) and shipped in the bundle, but imports also run at build
@@ -131,7 +142,9 @@ class Settings(BaseSettings):
     # Authentication session
     AUTHENTICATION_SESSION_TTL: timedelta = timedelta(minutes=15)
     AUTHENTICATION_SESSION_COOKIE_KEY: str = "polar_auth_session"
-    AUTHENTICATION_SESSION_COOKIE_DOMAIN: str = "127.0.0.1"
+    AUTHENTICATION_SESSION_COOKIE_DOMAIN: Annotated[
+        str | None, AfterValidator(_validate_cookie_domain)
+    ] = "127.0.0.1"
 
     # Email OTP
     EMAIL_OTP_TTL: timedelta = timedelta(minutes=30)
@@ -144,13 +157,17 @@ class Settings(BaseSettings):
     # OAuth2 session state
     OAUTH2_SESSION_STATE_TTL: timedelta = timedelta(minutes=10)
     OAUTH2_SESSION_STATE_COOKIE_KEY: str = "polar_oauth2_state"
-    OAUTH2_SESSION_STATE_COOKIE_DOMAIN: str = "127.0.0.1"
+    OAUTH2_SESSION_STATE_COOKIE_DOMAIN: Annotated[
+        str | None, AfterValidator(_validate_cookie_domain)
+    ] = "127.0.0.1"
 
     # User session
     USER_SESSION_TTL: timedelta = timedelta(days=31)
     USER_SESSION_FRESHNESS_TTL: timedelta = timedelta(hours=1)
     USER_SESSION_COOKIE_KEY: str = "polar_session"
-    USER_SESSION_COOKIE_DOMAIN: str = "127.0.0.1"
+    USER_SESSION_COOKIE_DOMAIN: Annotated[
+        str | None, AfterValidator(_validate_cookie_domain)
+    ] = "127.0.0.1"
 
     # Customer session
     CUSTOMER_SESSION_TTL: timedelta = timedelta(hours=1)
@@ -601,6 +618,33 @@ class Settings(BaseSettings):
         if self.REDIS_URL:
             return self.REDIS_URL
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+
+    @model_validator(mode="after")
+    def apply_vercel_url_defaults(self) -> "Settings":
+        """Derive public URLs from the deployment's own URL on Vercel.
+
+        Deployment URLs change with every deployment, so the local-dev
+        defaults can't be corrected with static configuration there. The
+        app origin mounts the API under /api. Explicitly configured values
+        (custom production domains) are left untouched.
+        """
+        vercel_url = os.environ.get("VERCEL_URL")
+        if not os.environ.get("VERCEL") or not vercel_url:
+            return self
+
+        if self.FRONTEND_BASE_URL == "http://127.0.0.1:3000":
+            self.FRONTEND_BASE_URL = f"https://{vercel_url}"
+        if self.BASE_URL == "http://127.0.0.1:8000":
+            self.BASE_URL = f"https://{vercel_url}/api"
+        if self.CHECKOUT_BASE_URL == (
+            "http://127.0.0.1:8000/v1/checkout-links/{client_secret}/redirect"
+        ):
+            self.CHECKOUT_BASE_URL = (
+                f"https://{vercel_url}/api/v1/checkout-links/{{client_secret}}/redirect"
+            )
+        if self.ALLOWED_HOSTS == {"127.0.0.1:3000", "localhost:3000"}:
+            self.ALLOWED_HOSTS = {vercel_url}
+        return self
 
     @model_validator(mode="after")
     def apply_postgres_url_non_pooling(self) -> "Settings":
