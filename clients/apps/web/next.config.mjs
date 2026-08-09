@@ -18,6 +18,15 @@ if (
   process.env.NEXT_PUBLIC_FRONTEND_BASE_URL = baseUrl
 }
 
+// On Vercel, deployment URLs change with every deployment, so when no
+// frontend base URL is configured explicitly, derive it from the
+// deployment's own URL. Keeps defaultFrontendHostname (and the /dashboard
+// cross-domain redirect below) pointed at this deployment instead of the
+// production polar.sh fallback.
+if (!process.env.NEXT_PUBLIC_FRONTEND_BASE_URL && process.env.VERCEL_URL) {
+  process.env.NEXT_PUBLIC_FRONTEND_BASE_URL = `https://${process.env.VERCEL_URL}`
+}
+
 const POLAR_AUTH_COOKIE_KEY =
   process.env.POLAR_AUTH_COOKIE_KEY || 'polar_session'
 const ENVIRONMENT =
