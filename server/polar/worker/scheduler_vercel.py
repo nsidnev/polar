@@ -8,6 +8,10 @@ mirroring how polar.worker.scheduler dispatches cron triggers.
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 
+from polar.subscription.scheduler import (
+    SubscriptionJobStore,
+    SubscriptionResumeJobStore,
+)
 from polar.worker.run import broker
 
 scheduler = BlockingScheduler(timezone="UTC")
@@ -27,5 +31,8 @@ for _actor_name in sorted(broker.get_declared_actors()):
             id=_actor_name,
             replace_existing=True,
         )
+
+scheduler.add_jobstore(SubscriptionJobStore(), "subscription")
+scheduler.add_jobstore(SubscriptionResumeJobStore(), "subscription_resume")
 
 __all__ = ["scheduler"]

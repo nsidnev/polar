@@ -204,6 +204,7 @@ exclude-newer-package = { reauth = false, polar-sdk = false, vercel-apscheduler 
 
 [tool.uv.sources]
 dramatiq = { git = "https://github.com/frankie567/dramatiq", rev = "memory-leak-asyncio-ter" }
+vercel-apscheduler = { git = "https://github.com/vercel/vercel-py", branch = "nsidnev/aps-multiple-stores", subdirectory = "integrations/vercel-apscheduler" }
 
 [tool.vercel]
 entrypoint = "polar.app:app"
