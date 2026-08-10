@@ -25,7 +25,7 @@ entrypoint = "pyproject.toml"
 # are normally local build artifacts; build them here so they ship in the
 # Function bundle. Migrations run last, closest to the deploy, standing in
 # for the pre-deploy hook services don't have yet.
-buildCommand = "export PATH=/pnpm10/node_modules/.bin:$PATH && uv run task emails && uv run task backoffice && uv run task db_migrate"
+buildCommand = "uv run task emails && uv run task backoffice && uv run task db_migrate"
 
 # An api.* host serves the whole API at its native paths, mirroring the
 # polar.sh / api.polar.sh split. On the app origin the API is exposed under
