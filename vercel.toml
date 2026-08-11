@@ -28,11 +28,14 @@ entrypoint = "pyproject.toml"
 buildCommand = "uv run task emails && uv run task backoffice && uv run task db_migrate"
 
 # An api.* host serves the whole API at its native paths, mirroring the
-# polar.sh / api.polar.sh split. On the app origin the API is exposed under
-# /api/v1 (plus the staff backoffice under /api/backoffice), forwarded
-# unstripped: the app handles the prefix itself (the long-standing /api/v1
-# alias, root_path for the rest), so the platform never rewrites paths and
-# generated URLs stay correct on both hosts.
+# polar.sh / api.polar.sh split. On the app origin the whole API is mounted
+# under /api (matching the app's RootPathMiddleware): /api/v1, the staff
+# backoffice, /search, /.well-known, /healthz, /openapi.json, and so on.
+# Paths are forwarded unstripped: the app handles the prefix itself (the
+# long-standing /api/v1 alias, root_path for the rest), so the platform
+# never rewrites paths and generated URLs stay correct on both hosts. The
+# two Next.js route handlers the web app owns under /api are carved out
+# ahead of the catch-all.
 
 [[rewrites]]
 source = "/:path(.*)"
@@ -40,11 +43,15 @@ has = [{ type = "host", value = { pre = "api." } }]
 destination = { type = "service", service = "api" }
 
 [[rewrites]]
-source = "/api/v1/:path(.*)?"
-destination = { type = "service", service = "api" }
+source = "/api/og"
+destination = { type = "service", service = "web" }
 
 [[rewrites]]
-source = "/api/backoffice/:path(.*)?"
+source = "/api/startup-program"
+destination = { type = "service", service = "web" }
+
+[[rewrites]]
+source = "/api/:path(.*)?"
 destination = { type = "service", service = "api" }
 
 [[rewrites]]
