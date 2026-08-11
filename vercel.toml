@@ -61,11 +61,14 @@ destination = { type = "service", service = "web" }
 # Pinned pre-release builder and Python runtime; drop once the services
 # rollout reaches the stable channel.
 [build.env]
-VERCEL_CLI_VERSION = "vercel@https://vercel-6yhco439f.vercel.sh/tarballs/vercel.tgz"
+VERCEL_CLI_VERSION = "vercel@latest"
 # The api bundle (Python deps plus the email renderer binary) exceeds the
 # classic Lambda caps; build it as a large function (up to 5 GB uncompressed).
 # The builder reads this at build time, so it must be build env, not [env].
 VERCEL_SUPPORT_LARGE_FUNCTIONS = "1"
+# Ship precompiled .pyc bytecode in the function bundle: cold starts otherwise
+# recompile the whole codebase from source (~40% of the Python boot time).
+VERCEL_PYTHON_COMPILEALL = "1"
 # Services deployments don't wire the Next image optimizer yet, so /_next/image
 # 404s; serve images unoptimized until that lands.
 NEXT_IMAGE_UNOPTIMIZED = "1"
