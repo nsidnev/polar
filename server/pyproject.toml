@@ -215,7 +215,7 @@ entrypoint = "polar.worker.run:broker"
 # Scoped to the scheduler's own wake topics: the module imports the dramatiq
 # broker, whose queue subscriptions would otherwise attach here too.
 [[tool.vercel.subscribers]]
-entrypoint = "polar.worker.scheduler_vercel:scheduler"
+entrypoint = "polar.worker.scheduler:scheduler"
 topics = ["__aps_*"]
 
 [tool.vercel.apscheduler.previews]
