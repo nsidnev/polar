@@ -39,6 +39,7 @@ from polar.logging import configure as configure_logging
 from polar.middlewares import (
     CacheControlMiddleware,
     FlushEnqueuedWorkerJobsMiddleware,
+    ForwardedHostMiddleware,
     LogCorrelationIdMiddleware,
     MaxBodySizeMiddleware,
     OperationalErrorMiddleware,
@@ -219,6 +220,14 @@ def create_app() -> FastAPI:
     app.add_middleware(MaxBodySizeMiddleware, limit=settings.API_MAX_REQUEST_BODY_SIZE)
     if not settings.is_testing():
         app.add_middleware(HttpMetricsMiddleware)
+    if settings.BACKOFFICE_PROXY_FORWARDED_HOST is not None:
+        # Added last so it runs first: logging, metrics and URL generation all
+        # see the proxy's host rather than the deployment's.
+        app.add_middleware(
+            ForwardedHostMiddleware,
+            host=settings.BACKOFFICE_PROXY_FORWARDED_HOST,
+            path_prefix="/api/backoffice" if settings.is_vercel() else "/backoffice",
+        )
 
     configure_cors(app)
 

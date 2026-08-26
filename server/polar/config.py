@@ -121,6 +121,20 @@ class Settings(BaseSettings):
     BACKOFFICE_HOST: str | None = None
     CHECKOUT_LINK_HOST: str | None = None  # e.g., "buy.polar.sh" in production
 
+    # Backoffice reverse proxy. When BACKOFFICE_PROXY_OIDC_ISSUER is set, the
+    # backoffice is reachable *only* through a proxy that proves its identity
+    # with an OIDC token from that issuer; every other request gets a 404.
+    # Unset (the default) leaves the cookie + is_admin authentication untouched.
+    BACKOFFICE_PROXY_OIDC_ISSUER: str | None = None
+    BACKOFFICE_PROXY_OIDC_AUDIENCE: str | None = None
+    BACKOFFICE_PROXY_OIDC_SUBJECT: str | None = None
+    # Host the proxy is reached at. Requests carrying it as a forwarded host are
+    # rendered with it, so generated URLs point back through the proxy.
+    BACKOFFICE_PROXY_FORWARDED_HOST: str | None = None
+    # Sessions minted for proxy-authenticated admins, kept short since the
+    # proxy re-proves its identity on every request anyway.
+    BACKOFFICE_PROXY_SESSION_TTL: timedelta = timedelta(hours=1)
+
     # URL to frontend app.
     # Update to ngrok domain or similar in case you want
     # working Github badges in development.

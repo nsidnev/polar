@@ -83,6 +83,47 @@ class AuthService:
 
         return user_session
 
+    async def get_or_create_user_session(
+        self,
+        session: AsyncSession,
+        user: User,
+        *,
+        user_agent: str,
+        scopes: list[Scope],
+        expire_in: timedelta = settings.USER_SESSION_TTL,
+    ) -> UserSession:
+        """Reuse a live session created under this user agent, or open one.
+
+        For callers that authenticate a user on every request by other means
+        and only need a session to hand to code expecting one. The user agent
+        acts as the reuse key, so repeated calls don't write a row each time.
+        The token isn't returned: these sessions aren't meant to reach a cookie.
+        """
+        statement = (
+            select(UserSession)
+            .where(
+                UserSession.user_id == user.id,
+                UserSession.user_agent == user_agent,
+                UserSession.expires_at > utc_now(),
+            )
+            .order_by(UserSession.expires_at.desc())
+            .limit(1)
+        )
+        result = await session.execute(statement)
+        user_session = result.unique().scalar_one_or_none()
+
+        if user_session is not None:
+            return user_session
+
+        _, user_session = await self._create_user_session(
+            session=session,
+            user=user,
+            user_agent=user_agent,
+            scopes=scopes,
+            expire_in=expire_in,
+        )
+        return user_session
+
     async def delete_expired(self, session: AsyncSession) -> None:
         statement = delete(UserSession).where(UserSession.expires_at < utc_now())
         await session.execute(statement)

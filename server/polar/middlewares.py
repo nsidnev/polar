@@ -104,6 +104,43 @@ class RootPathMiddleware:
         await self.app(scope, receive, send)
 
 
+class ForwardedHostMiddleware:
+    """Render requests behind a reverse proxy as if they arrived at the proxy.
+
+    Vercel routes on the Host header, so a proxy has to forward the deployment's
+    own host and carry its public one separately. Without this, everything the
+    app derives from the request (url_for, redirect Locations) points at the
+    deployment host and sends the browser around the proxy.
+
+    Only the configured host is accepted, and only under `path_prefix`, so a
+    request can't relabel itself as arriving anywhere else. Vercel's own
+    x-forwarded-* headers are deliberately left alone.
+    """
+
+    def __init__(self, app: ASGIApp, host: str, path_prefix: str) -> None:
+        self.app = app
+        self.host = host
+        self.path_prefix = path_prefix
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] not in ("http", "websocket"):
+            await self.app(scope, receive, send)
+            return
+
+        path = scope["path"]
+        if path == self.path_prefix or path.startswith(f"{self.path_prefix}/"):
+            headers = Headers(scope=scope)
+            if headers.get("x-polar-forwarded-host") == self.host:
+                scope = dict(scope)
+                mutable_headers = MutableHeaders(scope=scope)
+                mutable_headers["host"] = self.host
+                proto = headers.get("x-polar-forwarded-proto")
+                if proto in ("http", "https"):
+                    scope["scheme"] = proto
+
+        await self.app(scope, receive, send)
+
+
 class PathRewriteMiddleware:
     def __init__(
         self, app: ASGIApp, pattern: str | re.Pattern[str], replacement: str

@@ -25,4 +25,7 @@ server/.venv
 **/.coverage
 **/htmlcov
 
+# Deployed as a container image, not part of any Vercel build.
+infra/backoffice-proxy
+
 **/.DS_Store

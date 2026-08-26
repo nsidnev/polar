@@ -1,0 +1,118 @@
+team := env("VERCEL_TEAM", "nsidnev")
+project := env("VERCEL_PROJECT", "polar")
+box := "polar-backoffice-proxy"
+image := "vcr.vercel.com/" + team + "/" + project + "/" + box
+# Blackbox is in private alpha; the controller build is pinned explicitly.
+controller-version := env("BLACKBOX_CONTROLLER_VERSION", "staging:pr-238")
+
+go := "mise exec go@1.26.7 -- go"
+
+default:
+    @just --list
+
+# Run tests
+test:
+    {{go}} test ./...
+
+# Vet, build and check formatting
+check:
+    {{go}} vet ./...
+    {{go}} build ./...
+    test -z "$({{go}}fmt -l .)" || ({{go}}fmt -l . && exit 1)
+
+# Serve on localhost with no tailnet, for testing the proxy-to-API contract
+run-local addr="127.0.0.1:8080":
+    LOCAL_ADDR={{addr}} {{go}} run .
+
+# Join the tailnet and advertise the service (needs TS_CLIENT_ID or TS_AUTHKEY)
+run:
+    {{go}} run .
+
+# Authenticate docker with the Vercel Container Registry
+login-to-vcr:
+    vc vcr login docker
+
+# Build and push a single-manifest amd64 image
+#
+# Not `vc vcr build --push`: that goes through Buildx, which attaches provenance
+# attestations, so the tag ends up on an OCI index rather than an image. The
+# blackbox controller can't resolve an index and fails the rollout with a bare
+# 500. Disabling provenance and SBOM keeps the tag on a single amd64 manifest.
+build-image: login-to-vcr
+    docker buildx build \
+      --platform linux/amd64 \
+      --provenance=false \
+      --sbom=false \
+      -t {{image}}:latest \
+      --push .
+
+# Point the blackbox at the pushed image and set the replica count
+rollout replicas="1":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    token="$(jq -r .token "$HOME/Library/Application Support/com.vercel.cli/auth.json")"
+    echo "rolling out {{image}}:latest with {{replicas}} replica(s)"
+    # Referenced by tag, not digest: the API rejects @sha256: references with a
+    # 500, and resolves a tag to an immutable digest itself.
+    #
+    # POST with a map of box name to config: configs present are upserted,
+    # absent ones are deleted. __controllerVersion is a sibling of the entries,
+    # not part of a config.
+    body="$(jq -nc \
+      --arg box "{{box}}" \
+      --arg image "{{image}}:latest" \
+      --argjson replicas {{replicas}} \
+      --arg controller "{{controller-version}}" \
+      '{($box): {image: $image, replicas: $replicas}, __controllerVersion: $controller}')"
+    echo "> ${body}"
+    out="$(mktemp)"
+    trap 'rm -f "${out}"' EXIT
+    status="$(curl -sS -o "${out}" -w '%{http_code}' -X POST \
+      "https://api.vercel.com/v9/projects/{{project}}/boxes?slug={{team}}" \
+      -H "Authorization: Bearer ${token}" \
+      -H "Content-Type: application/json" \
+      --data "${body}")"
+    echo "< HTTP ${status}"
+    jq . < "${out}" 2>/dev/null || cat "${out}"
+    [ "${status}" -lt 400 ]
+
+# Show the current blackbox configuration
+status:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    token="$(jq -r .token "$HOME/Library/Application Support/com.vercel.cli/auth.json")"
+    out="$(mktemp)"
+    trap 'rm -f "${out}"' EXIT
+    status="$(curl -sS -o "${out}" -w '%{http_code}' \
+      "https://api.vercel.com/v9/projects/{{project}}/boxes?slug={{team}}" \
+      -H "Authorization: Bearer ${token}")"
+    echo "< HTTP ${status}"
+    jq . < "${out}" 2>/dev/null || cat "${out}"
+    [ "${status}" -lt 400 ]
+
+# Check, test, build, push and roll out
+deploy replicas="1": check test build-image (rollout replicas)
+
+# Scale to zero without tearing down the configuration
+stop: (rollout "0")
+
+# Show this box's own log output from Datadog
+logs since="15m":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Repo-linked projects keep the id in repo.json; project.json only has settings.
+    project_id="$(jq -r '.projects[0].id' ../../.vercel/repo.json)"
+    # The box's stdout is relayed by the controller, so filter to our own prefix:
+    # the rest is the controller enumerating the rootfs on every boot.
+    query="@context.projectId:\"${project_id}\" @context.boxName:\"{{box}}\" \"backoffice-proxy:\""
+    pup logs search --query "${query}" --from "{{since}}" --to now --output json \
+      | jq -r '.data | reverse | .[] | "\(.attributes.timestamp)  \(.attributes.message)"'
+
+# Show controller-level events for this box (restarts, exits, image pulls)
+events since="15m":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    project_id="$(jq -r '.projects[0].id' ../../.vercel/repo.json)"
+    query="@context.projectId:\"${project_id}\" @context.boxName:\"{{box}}\" -\"/sys/module\" -\"/proc/\""
+    pup logs search --query "${query}" --from "{{since}}" --to now --output json \
+      | jq -r '.data | reverse | .[] | "\(.attributes.timestamp)  [\(.attributes.status)] \(.attributes.message)"'
